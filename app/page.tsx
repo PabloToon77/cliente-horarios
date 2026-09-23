@@ -1,69 +1,141 @@
-import Image from "next/image";
+'use client';
+
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+
+interface Profesor {
+  id: number;
+  nombre: string;
+  apellido: string;
+  email: string;
+  horas_max_semanales: number;
+  tarifa_hora_clase: number;
+  tarifa_hora_admin: number;
+}
 
 export default function Home() {
+  const [profesores, setProfesores] = useState<Profesor[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Formulario
+  const [nombre, setNombre] = useState('');
+  const [apellido, setApellido] = useState('');
+  const [email, setEmail] = useState('');
+  const [horasMax, setHorasMax] = useState(40);
+
+  // Cargar profesores desde Supabase
+  const fetchProfesores = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from('profesores').select('*');
+    if (error) console.error('Error cargando profesores:', error);
+    else setProfesores(data || []);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchProfesores();
+  }, []);
+
+  // Agregar un profesor a la base de datos
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { error } = await supabase.from('profesores').insert([
+      {
+        nombre,
+        apellido,
+        email,
+        horas_max_semanales: horasMax,
+        tarifa_hora_clase: 15.00,
+        tarifa_hora_admin: 10.00,
+      },
+    ]);
+
+    if (error) {
+      alert('Error guardando profesor: ' + error.message);
+    } else {
+      setNombre('');
+      setApellido('');
+      setEmail('');
+      fetchProfesores();
+    }
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="max-w-4xl mx-auto p-6 space-y-8">
+      <h1 className="text-3xl font-bold">Gestión de Profesores</h1>
+
+      <form onSubmit={handleSubmit} className="bg-slate-900 p-6 rounded-lg space-y-4 text-white">
+        <h2 className="text-xl font-semibold">Agregar Nuevo Profesor</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <input
+            type="text"
+            placeholder="Nombre"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            required
+            className="p-2 rounded bg-slate-800 border border-slate-700 text-white"
+          />
+          <input
+            type="text"
+            placeholder="Apellido"
+            value={apellido}
+            onChange={(e) => setApellido(e.target.value)}
+            required
+            className="p-2 rounded bg-slate-800 border border-slate-700 text-white"
+          />
+          <input
+            type="email"
+            placeholder="Correo Electrónico"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            className="p-2 rounded bg-slate-800 border border-slate-700 text-white"
+          />
+          <input
+            type="number"
+            placeholder="Carga horaria máxima (semanal)"
+            value={horasMax}
+            onChange={(e) => setHorasMax(Number(e.target.value))}
+            required
+            className="p-2 rounded bg-slate-800 border border-slate-700 text-white"
+          />
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+        <button type="submit" className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded font-medium">
+          Guardar Profesor
+        </button>
+      </form>
+
+      <div className="space-y-4">
+        <h2 className="text-2xl font-semibold">Lista de Docentes</h2>
+        {loading ? (
+          <p>Cargando lista...</p>
+        ) : profesores.length === 0 ? (
+          <p className="text-gray-500">No hay profesores registrados aún.</p>
+        ) : (
+          <div className="border border-slate-200 rounded-lg overflow-hidden">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-slate-100">
+                <tr>
+                  <th className="p-3 border-b">Nombre</th>
+                  <th className="p-3 border-b">Email</th>
+                  <th className="p-3 border-b">Máx. Horas</th>
+                  <th className="p-3 border-b">Tarifa Clase</th>
+                </tr>
+              </thead>
+              <tbody>
+                {profesores.map((prof) => (
+                  <tr key={prof.id} className="border-b hover:bg-slate-50">
+                    <td className="p-3">{prof.nombre} {prof.apellido}</td>
+                    <td className="p-3">{prof.email}</td>
+                    <td className="p-3">{prof.horas_max_semanales} hrs/sem</td>
+                    <td className="p-3">${prof.tarifa_hora_clase}/hr</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </main>
   );
 }
