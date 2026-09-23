@@ -27,7 +27,25 @@ interface Curso {
   talleres_json?: Array<{ nombre: string; clases: number }>;
 }
 
-const SEDES = ['Ambato', 'Quito', 'Riobamba', 'Lago Agrio', 'Loja', 'Latacunga', 'Puyo'];
+// Lista actualizada de sedes incluyendo las nuevas opciones
+const SEDES = [
+  'Ambato',
+  'Quito',
+  'Riobamba',
+  'Lago Agrio',
+  'Loja',
+  'Latacunga',
+  'Puyo',
+  'Salcedo',
+  'Pujilí',
+  'Píllaro',
+  'Baños',
+  'Coca',
+  'Alausí',
+  'Bucay',
+  'Tena',
+];
+
 const JORNADAS = [
   'Matutina (08:00 - 12:00)',
   'Vespertina (14:00 - 18:00)',
@@ -321,7 +339,7 @@ export default function CursosPage() {
           </div>
 
           <div>
-            <label className="block text-xs text-slate-400 mb-1">Sede Principal</label>
+            <label className="block text-xs text-slate-400 mb-1">Sede</label>
             <select
               value={sede}
               onChange={(e) => setSede(e.target.value)}
