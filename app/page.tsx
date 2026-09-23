@@ -14,7 +14,7 @@ interface Profesor {
   tarifa_hora_clase: number;
   tarifa_hora_admin: number;
   disponibilidad_json?: Record<string, string[]>;
-  profesor_materia?: { materias: { nombre: string } }[];
+  profesor_materia?: { materias: { id: number; nombre: string } }[];
 }
 
 interface Materia {
@@ -66,7 +66,10 @@ export default function Home() {
   const [materiasDB, setMateriasDB] = useState<Materia[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Campos principales del formulario
+  // Estado para saber si estamos editando
+  const [profesorEditandoId, setProfesorEditandoId] = useState<number | null>(null);
+
+  // Campos del formulario
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
   const [email, setEmail] = useState('');
@@ -76,10 +79,9 @@ export default function Home() {
   const [tarifaAdmin, setTarifaAdmin] = useState<number | ''>('');
   const [materiasSeleccionadas, setMateriasSeleccionadas] = useState<string[]>([]);
 
-  // Estado para la Matriz de Disponibilidad
+  // Matriz de Disponibilidad
   const [disponibilidad, setDisponibilidad] = useState<Record<string, string[]>>({});
 
-  // Cargar datos al iniciar
   const inicializarDatos = async () => {
     setLoading(true);
 
@@ -97,9 +99,9 @@ export default function Home() {
     const { data: pData, error } = await supabase.from('profesores').select(`
       *,
       profesor_materia (
-        materias ( nombre )
+        materias ( id, nombre )
       )
-    `);
+    `).order('id', { ascending: false });
 
     if (error) console.error('Error cargando profesores:', error);
     else setProfesores(pData || []);
@@ -119,7 +121,6 @@ export default function Home() {
     }
   };
 
-  // Conmutador de bloque individual
   const toggleHorario = (dia: string, bloque: string) => {
     const horasDia = disponibilidad[dia] || [];
     let nuevasHoras: string[];
@@ -136,7 +137,6 @@ export default function Home() {
     });
   };
 
-  // Conmutador de DÍA COMPLETO
   const toggleDiaCompleto = (dia: string) => {
     const horasDia = disponibilidad[dia] || [];
     const estaTodoCompleto = BLOQUES_HORARIOS.every((bloque) => horasDia.includes(bloque));
@@ -147,6 +147,60 @@ export default function Home() {
     });
   };
 
+  const limpiarFormulario = () => {
+    setProfesorEditandoId(null);
+    setNombre('');
+    setApellido('');
+    setEmail('');
+    setSede('Ambato');
+    setTipoContrato('Tiempo completo (40h)');
+    setTarifaClase('');
+    setTarifaAdmin('');
+    setMateriasSeleccionadas([]);
+    setDisponibilidad({});
+  };
+
+  // Cargar datos de un profesor en el formulario para editar
+  const handleEditar = (prof: Profesor) => {
+    setProfesorEditandoId(prof.id);
+    setNombre(prof.nombre || '');
+    setApellido(prof.apellido || '');
+    setEmail(prof.email || '');
+    setSede(prof.sede || 'Ambato');
+    setTipoContrato(prof.tipo_contrato || 'Tiempo completo (40h)');
+    setTarifaClase(prof.tarifa_hora_clase || '');
+    setTarifaAdmin(prof.tarifa_hora_admin || '');
+    setDisponibilidad(prof.disponibilidad_json || {});
+
+    // Extraer materias asignadas
+    const mats = prof.profesor_materia
+      ?.map((pm) => pm.materias?.nombre)
+      .filter((n): n is string => Boolean(n)) || [];
+    setMateriasSeleccionadas(mats);
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Eliminar un docente
+  const handleEliminar = async (id: number, nombreProfesor: string) => {
+    const confirmar = window.confirm(`¿Estás seguro de que deseas eliminar al docente ${nombreProfesor}?`);
+    if (!confirmar) return;
+
+    // Supabase elimina automáticamente las relaciones en profesor_materia si está configurado ON DELETE CASCADE
+    const { error } = await supabase.from('profesores').delete().eq('id', id);
+
+    if (error) {
+      alert('Error eliminando profesor: ' + error.message);
+    } else {
+      alert('Profesor eliminado con éxito.');
+      if (profesorEditandoId === id) {
+        limpiarFormulario();
+      }
+      inicializarDatos();
+    }
+  };
+
+  // Guardar (Crear o Actualizar)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -162,10 +216,11 @@ export default function Home() {
     const tarifaClaseVal = tipoContrato === 'Por horas' ? Number(tarifaClase) || 0 : 0;
     const tarifaAdminVal = tipoContrato === 'Por horas' ? Number(tarifaAdmin) || 0 : 0;
 
-    const { data: nuevoProf, error: errorProf } = await supabase
-      .from('profesores')
-      .insert([
-        {
+    if (profesorEditandoId) {
+      // ACTUALIZAR DOCENTE EXISTENTE
+      const { error: errorProf } = await supabase
+        .from('profesores')
+        .update({
           nombre,
           apellido,
           email,
@@ -175,39 +230,73 @@ export default function Home() {
           tarifa_hora_clase: tarifaClaseVal,
           tarifa_hora_admin: tarifaAdminVal,
           disponibilidad_json: disponibilidad,
-        },
-      ])
-      .select()
-      .single();
+        })
+        .eq('id', profesorEditandoId);
 
-    if (errorProf) {
-      alert('Error guardando profesor: ' + errorProf.message);
-      return;
-    }
+      if (errorProf) {
+        alert('Error actualizando profesor: ' + errorProf.message);
+        return;
+      }
 
-    const relacionesMaterias = materiasSeleccionadas.map((matNombre) => {
-      const matObj = materiasDB.find((m) => m.nombre === matNombre);
-      return {
-        profesor_id: nuevoProf.id,
-        materia_id: matObj?.id,
-      };
-    });
+      // Eliminar relaciones de materias viejas y volver a insertar las nuevas
+      await supabase.from('profesor_materia').delete().eq('profesor_id', profesorEditandoId);
 
-    const { error: errorRel } = await supabase.from('profesor_materia').insert(relacionesMaterias);
+      const relacionesMaterias = materiasSeleccionadas.map((matNombre) => {
+        const matObj = materiasDB.find((m) => m.nombre === matNombre);
+        return {
+          profesor_id: profesorEditandoId,
+          materia_id: matObj?.id,
+        };
+      });
 
-    if (errorRel) {
-      alert('Error asociando materias: ' + errorRel.message);
-    } else {
-      setNombre('');
-      setApellido('');
-      setEmail('');
-      setSede('Ambato');
-      setTipoContrato('Tiempo completo (40h)');
-      setTarifaClase('');
-      setTarifaAdmin('');
-      setMateriasSeleccionadas([]);
-      setDisponibilidad({});
+      await supabase.from('profesor_materia').insert(relacionesMaterias);
+
+      alert('¡Profesor actualizado con éxito!');
+      limpiarFormulario();
       inicializarDatos();
+
+    } else {
+      // CREAR NUEVO DOCENTE
+      const { data: nuevoProf, error: errorProf } = await supabase
+        .from('profesores')
+        .insert([
+          {
+            nombre,
+            apellido,
+            email,
+            sede,
+            tipo_contrato: tipoContrato,
+            horas_max_semanales: horasMax,
+            tarifa_hora_clase: tarifaClaseVal,
+            tarifa_hora_admin: tarifaAdminVal,
+            disponibilidad_json: disponibilidad,
+          },
+        ])
+        .select()
+        .single();
+
+      if (errorProf) {
+        alert('Error guardando profesor: ' + errorProf.message);
+        return;
+      }
+
+      const relacionesMaterias = materiasSeleccionadas.map((matNombre) => {
+        const matObj = materiasDB.find((m) => m.nombre === matNombre);
+        return {
+          profesor_id: nuevoProf.id,
+          materia_id: matObj?.id,
+        };
+      });
+
+      const { error: errorRel } = await supabase.from('profesor_materia').insert(relacionesMaterias);
+
+      if (errorRel) {
+        alert('Error asociando materias: ' + errorRel.message);
+      } else {
+        alert('¡Profesor guardado con éxito!');
+        limpiarFormulario();
+        inicializarDatos();
+      }
     }
   };
 
@@ -217,7 +306,20 @@ export default function Home() {
 
       {/* Formulario */}
       <form onSubmit={handleSubmit} className="bg-slate-900 p-6 rounded-xl space-y-6 text-white shadow-lg">
-        <h2 className="text-xl font-semibold border-b border-slate-700 pb-2">Registrar Nuevo Profesor</h2>
+        <div className="flex justify-between items-center border-b border-slate-700 pb-2">
+          <h2 className="text-xl font-semibold">
+            {profesorEditandoId ? '✏️ Editar Profesor' : 'Registrar Nuevo Profesor'}
+          </h2>
+          {profesorEditandoId && (
+            <button
+              type="button"
+              onClick={limpiarFormulario}
+              className="text-xs text-slate-400 hover:text-white underline"
+            >
+              Cancelar Edición
+            </button>
+          )}
+        </div>
 
         {/* Datos Personales y Sede */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -343,7 +445,7 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Matriz de Disponibilidad Horaria con Selección de Día Completo */}
+        {/* Matriz de Disponibilidad Horaria */}
         <div className="space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <label className="block text-sm font-medium text-slate-300">
@@ -411,12 +513,23 @@ export default function Home() {
           </div>
         </div>
 
-        <button
-          type="submit"
-          className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-medium transition-colors text-base shadow-md"
-        >
-          Guardar Profesor
-        </button>
+        <div className="flex gap-3">
+          <button
+            type="submit"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-medium transition-colors text-base shadow-md"
+          >
+            {profesorEditandoId ? 'Actualizar Profesor' : 'Guardar Profesor'}
+          </button>
+          {profesorEditandoId && (
+            <button
+              type="button"
+              onClick={limpiarFormulario}
+              className="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition-colors text-base"
+            >
+              Cancelar
+            </button>
+          )}
+        </div>
       </form>
 
       {/* Tabla de Docentes Registrados */}
@@ -436,6 +549,7 @@ export default function Home() {
                   <th className="p-3.5 border-b">Contrato</th>
                   <th className="p-3.5 border-b">Tarifas (Clase / Admin)</th>
                   <th className="p-3.5 border-b">Materias Habilitadas</th>
+                  <th className="p-3.5 border-b text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
@@ -475,6 +589,24 @@ export default function Home() {
                         ) : (
                           <span className="text-slate-400 italic">Sin materias</span>
                         )}
+                      </div>
+                    </td>
+                    <td className="p-3.5 text-center">
+                      <div className="flex items-center justify-center space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => handleEditar(prof)}
+                          className="bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 text-xs px-3 py-1 rounded font-medium transition-colors"
+                        >
+                          ✏️ Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEliminar(prof.id, `${prof.nombre} ${prof.apellido}`)}
+                          className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 text-xs px-3 py-1 rounded font-medium transition-colors"
+                        >
+                          🗑️ Eliminar
+                        </button>
                       </div>
                     </td>
                   </tr>
