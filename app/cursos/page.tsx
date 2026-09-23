@@ -59,6 +59,9 @@ export default function CursosPage() {
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Estado para edición
+  const [cursoEditandoId, setCursoEditandoId] = useState<number | null>(null);
+
   // Campos básicos del formulario
   const [nombre, setNombre] = useState('');
   const [sede, setSede] = useState('Ambato');
@@ -162,42 +165,112 @@ export default function CursosPage() {
     setTalleres(talleres.filter((_, i) => i !== index));
   };
 
-  // Guardar en Supabase enviando periodo_lectivo
+  const limpiarFormulario = () => {
+    setCursoEditandoId(null);
+    setNombre('');
+    setSede('Ambato');
+    setJornada(JORNADAS[0]);
+    setEstado('Activo');
+    setAulaFisica('');
+    setPeriodoLectivo('2026-I');
+    setFechaInicio('');
+    setFechaFin('');
+    setClasesMaterias({});
+    setTalleres([]);
+    setBloques([]);
+  };
+
+  // Cargar datos de un curso en el formulario para editar
+  const handleEditarCurso = (c: Curso) => {
+    setCursoEditandoId(c.id);
+    setNombre(c.nombre || '');
+    setSede(c.sede || 'Ambato');
+    setJornada(c.jornada || JORNADAS[0]);
+    setEstado(c.estado || 'Activo');
+    setAulaFisica(c.aula_fisica || '');
+    setPeriodoLectivo(c.periodo_lectivo || '2026-I');
+    setFechaInicio(c.fecha_inicio || '');
+    setFechaFin(c.fecha_fin || '');
+    setClasesMaterias(c.malla_json || {});
+    setTalleres(c.talleres_json || []);
+    setBloques(c.horario_json || []);
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Eliminar un curso
+  const handleEliminarCurso = async (id: number, nombreCurso: string) => {
+    const confirmar = window.confirm(`¿Estás seguro de que deseas eliminar el curso "${nombreCurso}"?`);
+    if (!confirmar) return;
+
+    const { error } = await supabase.from('cursos').delete().eq('id', id);
+
+    if (error) {
+      alert('Error eliminando curso: ' + error.message);
+    } else {
+      alert('Curso eliminado con éxito.');
+      if (cursoEditandoId === id) {
+        limpiarFormulario();
+      }
+      cargarCursos();
+    }
+  };
+
+  // Guardar (Crear o Actualizar)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const { error } = await supabase.from('cursos').insert([
-      {
-        nombre,
-        sede,
-        jornada,
-        estado,
-        aula_fisica: aulaFisica,
-        periodo_lectivo: periodoLectivo, // <-- Se envía el campo obligatorio
-        fecha_inicio: fechaInicio || null,
-        fecha_fin: fechaFin || null,
-        malla_json: clasesMaterias,
-        talleres_json: talleres,
-        horario_json: bloques,
-      },
-    ]);
+    if (cursoEditandoId) {
+      // ACTUALIZAR CURSO EXISTENTE
+      const { error } = await supabase
+        .from('cursos')
+        .update({
+          nombre,
+          sede,
+          jornada,
+          estado,
+          aula_fisica: aulaFisica,
+          periodo_lectivo: periodoLectivo,
+          fecha_inicio: fechaInicio || null,
+          fecha_fin: fechaFin || null,
+          malla_json: clasesMaterias,
+          talleres_json: talleres,
+          horario_json: bloques,
+        })
+        .eq('id', cursoEditandoId);
 
-    if (error) {
-      alert('Error guardando curso: ' + error.message);
+      if (error) {
+        alert('Error actualizando curso: ' + error.message);
+      } else {
+        alert('¡Curso actualizado con éxito!');
+        limpiarFormulario();
+        cargarCursos();
+      }
     } else {
-      alert('¡Curso guardado con éxito!');
-      setNombre('');
-      setSede('Ambato');
-      setJornada(JORNADAS[0]);
-      setEstado('Activo');
-      setAulaFisica('');
-      setPeriodoLectivo('2026-I');
-      setFechaInicio('');
-      setFechaFin('');
-      setClasesMaterias({});
-      setTalleres([]);
-      setBloques([]);
-      cargarCursos();
+      // CREAR NUEVO CURSO
+      const { error } = await supabase.from('cursos').insert([
+        {
+          nombre,
+          sede,
+          jornada,
+          estado,
+          aula_fisica: aulaFisica,
+          periodo_lectivo: periodoLectivo,
+          fecha_inicio: fechaInicio || null,
+          fecha_fin: fechaFin || null,
+          malla_json: clasesMaterias,
+          talleres_json: talleres,
+          horario_json: bloques,
+        },
+      ]);
+
+      if (error) {
+        alert('Error guardando curso: ' + error.message);
+      } else {
+        alert('¡Curso guardado con éxito!');
+        limpiarFormulario();
+        cargarCursos();
+      }
     }
   };
 
@@ -206,7 +279,20 @@ export default function CursosPage() {
       <h1 className="text-3xl font-bold text-slate-800">Gestión de Cursos y Paralelos</h1>
 
       <form onSubmit={handleSubmit} className="bg-slate-900 p-6 rounded-xl space-y-6 text-white shadow-lg">
-        <h2 className="text-xl font-semibold border-b border-slate-700 pb-2">Crear Nuevo Curso / Grupo</h2>
+        <div className="flex justify-between items-center border-b border-slate-700 pb-2">
+          <h2 className="text-xl font-semibold">
+            {cursoEditandoId ? '✏️ Editar Curso / Grupo' : 'Crear Nuevo Curso / Grupo'}
+          </h2>
+          {cursoEditandoId && (
+            <button
+              type="button"
+              onClick={limpiarFormulario}
+              className="text-xs text-slate-400 hover:text-white underline"
+            >
+              Cancelar Edición
+            </button>
+          )}
+        </div>
 
         {/* Información Básica */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -509,12 +595,23 @@ export default function CursosPage() {
           </div>
         </div>
 
-        <button
-          type="submit"
-          className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-medium transition-colors text-base shadow-md"
-        >
-          Guardar Curso
-        </button>
+        <div className="flex gap-3">
+          <button
+            type="submit"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-medium transition-colors text-base shadow-md"
+          >
+            {cursoEditandoId ? 'Actualizar Curso' : 'Guardar Curso'}
+          </button>
+          {cursoEditandoId && (
+            <button
+              type="button"
+              onClick={limpiarFormulario}
+              className="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition-colors text-base"
+            >
+              Cancelar
+            </button>
+          )}
+        </div>
       </form>
 
       {/* Lista de Cursos Registrados */}
@@ -576,6 +673,24 @@ export default function CursosPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Botones de Acciones: Editar y Eliminar */}
+                <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => handleEditarCurso(c)}
+                    className="bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 text-xs px-3 py-1.5 rounded font-medium transition-colors"
+                  >
+                    ✏️ Editar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleEliminarCurso(c.id, c.nombre)}
+                    className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 text-xs px-3 py-1.5 rounded font-medium transition-colors"
+                  >
+                    🗑️ Eliminar
+                  </button>
+                </div>
               </div>
             ))}
           </div>
