@@ -8,9 +8,12 @@ interface Profesor {
   nombre: string;
   apellido: string;
   email: string;
+  sede: string;
+  tipo_contrato: string;
   horas_max_semanales: number;
   tarifa_hora_clase: number;
   tarifa_hora_admin: number;
+  disponibilidad_json?: Record<string, string[]>;
   profesor_materia?: { materias: { nombre: string } }[];
 }
 
@@ -18,6 +21,16 @@ interface Materia {
   id: number;
   nombre: string;
 }
+
+const SEDES = [
+  'Ambato',
+  'Quito',
+  'Riobamba',
+  'Lago Agrio',
+  'Loja',
+  'Latacunga',
+  'Puyo',
+];
 
 const MATERIAS_DISPONIBLES = [
   'Matemáticas',
@@ -31,24 +44,47 @@ const MATERIAS_DISPONIBLES = [
   'Razonamiento Lógico',
 ];
 
+// Se agrega Domingo al listado de días
+const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+
+const BLOQUES_HORARIOS = [
+  '07:00 - 08:00',
+  '08:00 - 09:00',
+  '09:00 - 10:00',
+  '10:00 - 11:00',
+  '11:00 - 12:00',
+  '12:00 - 13:00',
+  '14:00 - 15:00',
+  '15:00 - 16:00',
+  '16:00 - 17:00',
+  '17:00 - 18:00',
+  '18:00 - 19:00',
+  '19:00 - 20:00',
+];
+
 export default function Home() {
   const [profesores, setProfesores] = useState<Profesor[]>([]);
   const [materiasDB, setMateriasDB] = useState<Materia[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Campos del Formulario
+  // Campos principales del formulario
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
   const [email, setEmail] = useState('');
+  const [sede, setSede] = useState('Ambato');
+  const [tipoContrato, setTipoContrato] = useState('Tiempo completo (40h)');
   const [tarifaClase, setTarifaClase] = useState<number | ''>('');
   const [tarifaAdmin, setTarifaAdmin] = useState<number | ''>('');
   const [materiasSeleccionadas, setMateriasSeleccionadas] = useState<string[]>([]);
 
-  // Garantizar que las materias existan en la BD y cargar profesores
+  // Estado para la Matriz de Disponibilidad (Día -> lista de horas disponibles)
+  const [disponibilidad, setDisponibilidad] = useState<Record<string, string[]>>({});
+
+  // Cargar datos al iniciar
   const inicializarDatos = async () => {
     setLoading(true);
 
-    // 1. Insertar materias fijas si no existen en la base de datos
+    // 1. Insertar materias fijas en la BD si no existen
     for (const matNombre of MATERIAS_DISPONIBLES) {
       const codigo = matNombre.substring(0, 3).toUpperCase() + Math.floor(100 + Math.random() * 900);
       await supabase.from('materias').upsert(
@@ -57,11 +93,11 @@ export default function Home() {
       );
     }
 
-    // 2. Traer la lista de materias registradas
+    // 2. Traer materias
     const { data: mData } = await supabase.from('materias').select('*');
     setMateriasDB(mData || []);
 
-    // 3. Traer los profesores con sus materias asignadas
+    // 3. Traer profesores con sus relaciones
     const { data: pData, error } = await supabase.from('profesores').select(`
       *,
       profesor_materia (
@@ -79,7 +115,7 @@ export default function Home() {
     inicializarDatos();
   }, []);
 
-  // Manejar selección/deselección de materias
+  // Manejador de selección de materias
   const handleCheckboxChange = (materiaNombre: string) => {
     if (materiasSeleccionadas.includes(materiaNombre)) {
       setMateriasSeleccionadas(materiasSeleccionadas.filter((m) => m !== materiaNombre));
@@ -88,16 +124,41 @@ export default function Home() {
     }
   };
 
-  // Guardar nuevo profesor con sus materias
+  // Manejador de selección de horarios en la grilla
+  const toggleHorario = (dia: string, bloque: string) => {
+    const horasDia = disponibilidad[dia] || [];
+    let nuevasHoras: string[];
+
+    if (horasDia.includes(bloque)) {
+      nuevasHoras = horasDia.filter((h) => h !== bloque);
+    } else {
+      nuevasHoras = [...horasDia, bloque];
+    }
+
+    setDisponibilidad({
+      ...disponibilidad,
+      [dia]: nuevasHoras,
+    });
+  };
+
+  // Guardar nuevo profesor
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (materiasSeleccionadas.length === 0) {
-      alert('Por favor selecciona al menos una materia que el profesor pueda dictar.');
+      alert('Por favor selecciona al menos una materia que el profesor pueda impartir.');
       return;
     }
 
-    // 1. Insertar el profesor
+    // Determinar horas semanales según tipo de contrato
+    let horasMax = 40;
+    if (tipoContrato === 'Medio tiempo (20h)') horasMax = 20;
+    if (tipoContrato === 'Por horas') horasMax = 0;
+
+    const tarifaClaseVal = tipoContrato === 'Por horas' ? Number(tarifaClase) || 0 : 0;
+    const tarifaAdminVal = tipoContrato === 'Por horas' ? Number(tarifaAdmin) || 0 : 0;
+
+    // 1. Guardar en tabla profesores
     const { data: nuevoProf, error: errorProf } = await supabase
       .from('profesores')
       .insert([
@@ -105,9 +166,12 @@ export default function Home() {
           nombre,
           apellido,
           email,
-          horas_max_semanales: 40,
-          tarifa_hora_clase: Number(tarifaClase),
-          tarifa_hora_admin: Number(tarifaAdmin),
+          sede,
+          tipo_contrato: tipoContrato,
+          horas_max_semanales: horasMax,
+          tarifa_hora_clase: tarifaClaseVal,
+          tarifa_hora_admin: tarifaAdminVal,
+          disponibilidad_json: disponibilidad,
         },
       ])
       .select()
@@ -118,7 +182,7 @@ export default function Home() {
       return;
     }
 
-    // 2. Asociar las materias seleccionadas en la tabla intermedia profesor_materia
+    // 2. Asociar materias
     const relacionesMaterias = materiasSeleccionadas.map((matNombre) => {
       const matObj = materiasDB.find((m) => m.nombre === matNombre);
       return {
@@ -132,27 +196,30 @@ export default function Home() {
     if (errorRel) {
       alert('Error asociando materias: ' + errorRel.message);
     } else {
-      // Limpiar campos
+      // Limpiar formulario
       setNombre('');
       setApellido('');
       setEmail('');
+      setSede('Ambato');
+      setTipoContrato('Tiempo completo (40h)');
       setTarifaClase('');
       setTarifaAdmin('');
       setMateriasSeleccionadas([]);
-      inicializarDatos(); // Recargar tabla
+      setDisponibilidad({});
+      inicializarDatos();
     }
   };
 
   return (
-    <main className="max-w-5xl mx-auto p-6 space-y-8">
-      <h1 className="text-3xl font-bold text-slate-800">Gestión de Profesores</h1>
+    <main className="max-w-6xl mx-auto p-6 space-y-8">
+      <h1 className="text-3xl font-bold text-slate-800">Gestión de Docentes</h1>
 
       {/* Formulario */}
       <form onSubmit={handleSubmit} className="bg-slate-900 p-6 rounded-xl space-y-6 text-white shadow-lg">
-        <h2 className="text-xl font-semibold border-b border-slate-700 pb-2">Registrar Nuevo Docente</h2>
+        <h2 className="text-xl font-semibold border-b border-slate-700 pb-2">Registrar Nuevo Profesor</h2>
 
-        {/* Datos Personales */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Datos Personales y Sede */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-xs text-slate-400 mb-1">Nombre</label>
             <input
@@ -186,40 +253,79 @@ export default function Home() {
               className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500"
             />
           </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Sede Principal</label>
+            <select
+              value={sede}
+              onChange={(e) => setSede(e.target.value)}
+              className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500"
+            >
+              {SEDES.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
-        {/* Tarifas */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">Valor por Hora de Clase ($)</label>
-            <input
-              type="number"
-              step="0.01"
-              placeholder="Ej. 12.50"
-              value={tarifaClase}
-              onChange={(e) => setTarifaClase(e.target.value === '' ? '' : Number(e.target.value))}
-              required
+        {/* Relación de Dependencia */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-800/40 p-4 rounded-lg border border-slate-700">
+          <div className="md:col-span-1">
+            <label className="block text-xs text-slate-400 mb-1">Relación de Dependencia</label>
+            <select
+              value={tipoContrato}
+              onChange={(e) => setTipoContrato(e.target.value)}
               className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500"
-            />
+            >
+              <option value="Tiempo completo (40h)">Tiempo Completo (40 hrs/sem)</option>
+              <option value="Medio tiempo (20h)">Medio Tiempo (20 hrs/sem)</option>
+              <option value="Por horas">Por Horas</option>
+            </select>
           </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">Valor por Hora Administrativa ($)</label>
-            <input
-              type="number"
-              step="0.01"
-              placeholder="Ej. 8.00"
-              value={tarifaAdmin}
-              onChange={(e) => setTarifaAdmin(e.target.value === '' ? '' : Number(e.target.value))}
-              required
-              className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500"
-            />
-          </div>
+
+          {tipoContrato === 'Por horas' ? (
+            <>
+              <div>
+                <label className="block text-xs text-blue-400 font-medium mb-1">
+                  Valor por Hora de Clase ($)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Ej. 12.50"
+                  value={tarifaClase}
+                  onChange={(e) => setTarifaClase(e.target.value === '' ? '' : Number(e.target.value))}
+                  required
+                  className="w-full p-2.5 rounded-lg bg-slate-800 border border-blue-500/50 text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-blue-400 font-medium mb-1">
+                  Valor por Hora Administrativa ($)
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  placeholder="Ej. 8.00"
+                  value={tarifaAdmin}
+                  onChange={(e) => setTarifaAdmin(e.target.value === '' ? '' : Number(e.target.value))}
+                  required
+                  className="w-full p-2.5 rounded-lg bg-slate-800 border border-blue-500/50 text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+            </>
+          ) : (
+            <div className="md:col-span-2 flex items-center text-xs text-slate-400 italic">
+              * El tipo de contrato incluye una carga horaria regulada por salario mensual predeterminado.
+            </div>
+          )}
         </div>
 
         {/* Selección de Materias */}
         <div>
           <label className="block text-sm font-medium text-slate-300 mb-3">
-            Materias que puede impartir:
+            Materias Habilitadas:
           </label>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-800/50 p-4 rounded-lg border border-slate-700">
             {MATERIAS_DISPONIBLES.map((materia) => (
@@ -236,30 +342,76 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Matriz de Disponibilidad Horaria (Incluyendo Domingo) */}
+        <div className="space-y-3">
+          <label className="block text-sm font-medium text-slate-300">
+            Disponibilidad Horaria (Selecciona los bloques disponibles):
+          </label>
+          <div className="overflow-x-auto border border-slate-700 rounded-lg bg-slate-800/30 p-4">
+            <table className="w-full text-xs text-center border-collapse">
+              <thead>
+                <tr>
+                  <th className="p-2 border-b border-slate-700 text-slate-400">Franja Horaria</th>
+                  {DIAS_SEMANA.map((dia) => (
+                    <th key={dia} className="p-2 border-b border-slate-700 text-slate-300 font-semibold">
+                      {dia}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800">
+                {BLOQUES_HORARIOS.map((bloque) => (
+                  <tr key={bloque} className="hover:bg-slate-800/50">
+                    <td className="p-2 font-mono text-slate-400 font-medium whitespace-nowrap">{bloque}</td>
+                    {DIAS_SEMANA.map((dia) => {
+                      const estaSeleccionado = (disponibilidad[dia] || []).includes(bloque);
+                      return (
+                        <td key={dia} className="p-1">
+                          <button
+                            type="button"
+                            onClick={() => toggleHorario(dia, bloque)}
+                            className={`w-full py-1.5 px-2 rounded font-medium transition-colors ${
+                              estaSeleccionado
+                                ? 'bg-emerald-600 text-white hover:bg-emerald-500'
+                                : 'bg-slate-800 text-slate-500 hover:bg-slate-700 hover:text-slate-300'
+                            }`}
+                          >
+                            {estaSeleccionado ? 'Disponible' : '-'}
+                          </button>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <button
           type="submit"
-          className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition-colors"
+          className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-medium transition-colors text-base shadow-md"
         >
           Guardar Profesor
         </button>
       </form>
 
-      {/* Tabla de Profesores Registrados */}
+      {/* Tabla de Docentes Registrados */}
       <div className="space-y-4">
         <h2 className="text-2xl font-semibold text-slate-800">Docentes Registrados</h2>
         {loading ? (
           <p className="text-slate-500">Cargando profesores...</p>
         ) : profesores.length === 0 ? (
-          <p className="text-slate-500 italic">No hay profesores registrados en el sistema.</p>
+          <p className="text-slate-500 italic">No hay profesores registrados aún.</p>
         ) : (
           <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm bg-white">
             <table className="w-full text-left border-collapse">
               <thead className="bg-slate-100 text-slate-700 text-sm">
                 <tr>
                   <th className="p-3.5 border-b">Docente</th>
-                  <th className="p-3.5 border-b">Email</th>
-                  <th className="p-3.5 border-b">Tarifa Clase</th>
-                  <th className="p-3.5 border-b">Tarifa Admin</th>
+                  <th className="p-3.5 border-b">Sede</th>
+                  <th className="p-3.5 border-b">Contrato</th>
+                  <th className="p-3.5 border-b">Tarifas (Clase / Admin)</th>
                   <th className="p-3.5 border-b">Materias Habilitadas</th>
                 </tr>
               </thead>
@@ -267,11 +419,25 @@ export default function Home() {
                 {profesores.map((prof) => (
                   <tr key={prof.id} className="hover:bg-slate-50">
                     <td className="p-3.5 font-medium text-slate-900">
-                      {prof.nombre} {prof.apellido}
+                      <div>{prof.nombre} {prof.apellido}</div>
+                      <div className="text-xs text-slate-500">{prof.email}</div>
                     </td>
-                    <td className="p-3.5 text-slate-600">{prof.email}</td>
-                    <td className="p-3.5 text-emerald-600 font-semibold">${prof.tarifa_hora_clase.toFixed(2)}/h</td>
-                    <td className="p-3.5 text-blue-600 font-semibold">${prof.tarifa_hora_admin.toFixed(2)}/h</td>
+                    <td className="p-3.5 text-slate-700 font-medium">{prof.sede || 'Ambato'}</td>
+                    <td className="p-3.5">
+                      <span className="bg-slate-100 text-slate-800 text-xs px-2.5 py-1 rounded-full font-medium border border-slate-200">
+                        {prof.tipo_contrato || 'Tiempo completo'}
+                      </span>
+                    </td>
+                    <td className="p-3.5">
+                      {prof.tipo_contrato === 'Por horas' ? (
+                        <div className="text-xs space-y-0.5">
+                          <span className="text-emerald-600 font-semibold block">Clase: ${prof.tarifa_hora_clase}/h</span>
+                          <span className="text-blue-600 font-semibold block">Admin: ${prof.tarifa_hora_admin}/h</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400 italic">N/A (Sueldo Fijo)</span>
+                      )}
+                    </td>
                     <td className="p-3.5">
                       <div className="flex flex-wrap gap-1">
                         {prof.profesor_materia && prof.profesor_materia.length > 0 ? (
