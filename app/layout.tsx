@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'Sistema de Horarios y Gestión Académica',
-  description: 'Sistema de gestión de docentes, cursos, paralelos y calendarios académicos',
+  description: 'Sistema de gestión de docentes, cursos, paralelos, calendarios académicos y asignación de horarios',
 };
 
 export default function RootLayout({
@@ -41,11 +41,14 @@ export default function RootLayout({
               <a href="/feriados" className="hover:text-blue-400 transition-colors">
                 Feriados y Calendario
               </a>
+              <a href="/asignacion" className="hover:text-blue-400 transition-colors">
+                Asignación de Horarios
+              </a>
             </div>
           </div>
         </nav>
 
-        {/* Contenido dinámico de las páginas */}
+        {/* Contenido dinámico de cada página */}
         <div className="py-6">{children}</div>
       </body>
     </html>
