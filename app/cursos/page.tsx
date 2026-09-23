@@ -19,6 +19,7 @@ interface Curso {
   jornada: string;
   estado: string;
   aula_fisica: string;
+  periodo_lectivo: string;
   fecha_inicio?: string;
   fecha_fin?: string;
   horario_json?: BloqueClase[];
@@ -48,22 +49,23 @@ const MATERIAS_BASE = [
 
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
-// Generar horas (00 a 23)
+// Horas de 00 a 23
 const HORAS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 
-// Generar minutos en intervalos de 5 minutos (00, 05, 10, ..., 55)
+// Minutos de 5 en 5 (00, 05, 10, ..., 55)
 const MINUTOS = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
 
 export default function CursosPage() {
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Campos básicos
+  // Campos básicos del formulario
   const [nombre, setNombre] = useState('');
   const [sede, setSede] = useState('Ambato');
   const [jornada, setJornada] = useState(JORNADAS[0]);
   const [estado, setEstado] = useState('Activo');
   const [aulaFisica, setAulaFisica] = useState('');
+  const [periodoLectivo, setPeriodoLectivo] = useState('2026-I');
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
 
@@ -75,10 +77,10 @@ export default function CursosPage() {
   const [nuevoTallerNombre, setNuevoTallerNombre] = useState('');
   const [nuevoTallerClases, setNuevoTallerClases] = useState<number | ''>('');
 
-  // Lista de Bloques de Clase Creados Manualmente
+  // Lista de Bloques de Clase
   const [bloques, setBloques] = useState<BloqueClase[]>([]);
 
-  // Campos para la nueva clase en edición
+  // Campos para nuevo bloque de clase
   const [diaSel, setDiaSel] = useState('Lunes');
   const [hInicioSel, setHInicioSel] = useState('08');
   const [mInicioSel, setMInicioSel] = useState('00');
@@ -97,7 +99,7 @@ export default function CursosPage() {
     cargarCursos();
   }, []);
 
-  // Agregar nueva clase manualmente
+  // Agregar bloque manual
   const handleAgregarClase = () => {
     const inicioMin = Number(hInicioSel) * 60 + Number(mInicioSel);
     const finMin = Number(hFinSel) * 60 + Number(mFinSel);
@@ -119,7 +121,7 @@ export default function CursosPage() {
     setBloques([...bloques, nuevoBloque]);
   };
 
-  // Duplicar una clase existente
+  // Duplicar bloque de clase
   const handleDuplicarClase = (bloque: BloqueClase) => {
     const bloqueDuplicado: BloqueClase = {
       ...bloque,
@@ -128,12 +130,12 @@ export default function CursosPage() {
     setBloques([...bloques, bloqueDuplicado]);
   };
 
-  // Eliminar una clase de la lista
+  // Eliminar bloque de clase
   const handleEliminarClase = (id: string) => {
     setBloques(bloques.filter((b) => b.id !== id));
   };
 
-  // Manejo de número de clases por materia
+  // Asignar clases por materia
   const handleMateriaClasesChange = (materia: string, valor: number) => {
     setClasesMaterias({
       ...clasesMaterias,
@@ -160,7 +162,7 @@ export default function CursosPage() {
     setTalleres(talleres.filter((_, i) => i !== index));
   };
 
-  // Guardar Curso en Supabase
+  // Guardar en Supabase enviando periodo_lectivo
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -171,6 +173,7 @@ export default function CursosPage() {
         jornada,
         estado,
         aula_fisica: aulaFisica,
+        periodo_lectivo: periodoLectivo, // <-- Se envía el campo obligatorio
         fecha_inicio: fechaInicio || null,
         fecha_fin: fechaFin || null,
         malla_json: clasesMaterias,
@@ -188,6 +191,7 @@ export default function CursosPage() {
       setJornada(JORNADAS[0]);
       setEstado('Activo');
       setAulaFisica('');
+      setPeriodoLectivo('2026-I');
       setFechaInicio('');
       setFechaFin('');
       setClasesMaterias({});
@@ -213,6 +217,18 @@ export default function CursosPage() {
               placeholder="Ej. Preuniversitario Intensivo - Grupo A"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
+              required
+              className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Período Lectivo</label>
+            <input
+              type="text"
+              placeholder="Ej. 2026-I / Costa 2026"
+              value={periodoLectivo}
+              onChange={(e) => setPeriodoLectivo(e.target.value)}
               required
               className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500"
             />
@@ -367,16 +383,14 @@ export default function CursosPage() {
           </div>
         </div>
 
-        {/* NUEVO SELECTOR DE HORARIOS MANUAL CON DESPLEGABLES Y OPCIÓN DE DUPLICAR */}
+        {/* Selector de Horarios Manual */}
         <div className="space-y-4">
           <label className="block text-sm font-medium text-slate-300">
             Horario de Clases (Agregar bloques de hora manualmente):
           </label>
 
-          {/* Formulario para agregar un bloque de hora */}
           <div className="bg-slate-800/60 p-4 rounded-xl border border-slate-700 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-              {/* Selección de Día */}
               <div>
                 <label className="block text-xs text-slate-400 mb-1">Día de la semana</label>
                 <select
@@ -390,7 +404,6 @@ export default function CursosPage() {
                 </select>
               </div>
 
-              {/* Hora de Inicio */}
               <div>
                 <label className="block text-xs text-slate-400 mb-1">Hora de Inicio</label>
                 <div className="flex items-center space-x-1">
@@ -416,7 +429,6 @@ export default function CursosPage() {
                 </div>
               </div>
 
-              {/* Hora de Fin */}
               <div>
                 <label className="block text-xs text-slate-400 mb-1">Hora de Fin</label>
                 <div className="flex items-center space-x-1">
@@ -452,7 +464,6 @@ export default function CursosPage() {
             </button>
           </div>
 
-          {/* Lista de clases programadas para este curso */}
           <div className="space-y-2">
             <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
               Clases Programadas ({bloques.length})
@@ -520,7 +531,14 @@ export default function CursosPage() {
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="font-bold text-slate-900 text-lg">{c.nombre}</h3>
-                    <p className="text-xs text-slate-500">Aula: <span className="font-medium text-slate-700">{c.aula_fisica}</span></p>
+                    <p className="text-xs text-slate-500">
+                      Aula: <span className="font-medium text-slate-700">{c.aula_fisica}</span>
+                      {c.periodo_lectivo && (
+                        <span className="ml-2 bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono text-[10px]">
+                          {c.periodo_lectivo}
+                        </span>
+                      )}
+                    </p>
                   </div>
                   <div className="flex flex-col items-end gap-1">
                     <span className="bg-blue-50 text-blue-700 text-xs px-2.5 py-0.5 rounded-full font-semibold border border-blue-200">
