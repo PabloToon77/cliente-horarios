@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Sistema de Horarios y Nómina',
-  description: 'Gestión Académica y Horarios',
+  title: 'Sistema de Horarios y Gestión Académica',
+  description: 'Sistema de gestión de docentes, cursos, paralelos y calendarios académicos',
 };
 
 export default function RootLayout({
@@ -24,25 +24,28 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-50 min-h-screen`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-50 min-h-screen text-slate-900`}>
         {/* Barra de Navegación Global */}
-        <nav className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-50">
-          <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+        <nav className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-50 shadow-md">
+          <div className="max-w-6xl mx-auto px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
             <span className="font-bold text-lg tracking-wide text-blue-400">
               Sistema Académico
             </span>
-            <div className="flex space-x-6 text-sm font-medium">
+            <div className="flex flex-wrap justify-center space-x-6 text-sm font-medium">
               <a href="/" className="hover:text-blue-400 transition-colors">
                 Gestión de Docentes
               </a>
               <a href="/cursos" className="hover:text-blue-400 transition-colors">
                 Gestión de Cursos
               </a>
+              <a href="/feriados" className="hover:text-blue-400 transition-colors">
+                Feriados y Calendario
+              </a>
             </div>
           </div>
         </nav>
 
-        {/* Contenido de cada página */}
+        {/* Contenido dinámico de las páginas */}
         <div className="py-6">{children}</div>
       </body>
     </html>
