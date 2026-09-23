@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'Sistema Integrado de Horarios y Gestión Académica',
-  description: 'Plataforma completa para docentes, cursos, calendarios, asignación e impresión de horarios.',
+  description: 'Plataforma completa para docentes, cursos, calendarios, asignación, actividades extras e impresión de horarios.',
 };
 
 export default function RootLayout({
@@ -43,6 +43,9 @@ export default function RootLayout({
               </a>
               <a href="/asignacion" className="hover:text-blue-400 transition-colors">
                 Asignación Automática
+              </a>
+              <a href="/actividades-extras" className="hover:text-blue-400 transition-colors">
+                Actividades Extras
               </a>
               <a href="/horario-consolidado" className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded-lg transition-colors">
                 📊 Horario Consolidado
