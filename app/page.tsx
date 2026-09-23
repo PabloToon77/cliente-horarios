@@ -44,7 +44,6 @@ const MATERIAS_DISPONIBLES = [
   'Razonamiento Lógico',
 ];
 
-// Se agrega Domingo al listado de días
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
 const BLOQUES_HORARIOS = [
@@ -77,14 +76,13 @@ export default function Home() {
   const [tarifaAdmin, setTarifaAdmin] = useState<number | ''>('');
   const [materiasSeleccionadas, setMateriasSeleccionadas] = useState<string[]>([]);
 
-  // Estado para la Matriz de Disponibilidad (Día -> lista de horas disponibles)
+  // Estado para la Matriz de Disponibilidad
   const [disponibilidad, setDisponibilidad] = useState<Record<string, string[]>>({});
 
   // Cargar datos al iniciar
   const inicializarDatos = async () => {
     setLoading(true);
 
-    // 1. Insertar materias fijas en la BD si no existen
     for (const matNombre of MATERIAS_DISPONIBLES) {
       const codigo = matNombre.substring(0, 3).toUpperCase() + Math.floor(100 + Math.random() * 900);
       await supabase.from('materias').upsert(
@@ -93,11 +91,9 @@ export default function Home() {
       );
     }
 
-    // 2. Traer materias
     const { data: mData } = await supabase.from('materias').select('*');
     setMateriasDB(mData || []);
 
-    // 3. Traer profesores con sus relaciones
     const { data: pData, error } = await supabase.from('profesores').select(`
       *,
       profesor_materia (
@@ -115,7 +111,6 @@ export default function Home() {
     inicializarDatos();
   }, []);
 
-  // Manejador de selección de materias
   const handleCheckboxChange = (materiaNombre: string) => {
     if (materiasSeleccionadas.includes(materiaNombre)) {
       setMateriasSeleccionadas(materiasSeleccionadas.filter((m) => m !== materiaNombre));
@@ -124,7 +119,7 @@ export default function Home() {
     }
   };
 
-  // Manejador de selección de horarios en la grilla
+  // Conmutador de bloque individual
   const toggleHorario = (dia: string, bloque: string) => {
     const horasDia = disponibilidad[dia] || [];
     let nuevasHoras: string[];
@@ -141,7 +136,17 @@ export default function Home() {
     });
   };
 
-  // Guardar nuevo profesor
+  // Conmutador de DÍA COMPLETO
+  const toggleDiaCompleto = (dia: string) => {
+    const horasDia = disponibilidad[dia] || [];
+    const estaTodoCompleto = BLOQUES_HORARIOS.every((bloque) => horasDia.includes(bloque));
+
+    setDisponibilidad({
+      ...disponibilidad,
+      [dia]: estaTodoCompleto ? [] : [...BLOQUES_HORARIOS],
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -150,7 +155,6 @@ export default function Home() {
       return;
     }
 
-    // Determinar horas semanales según tipo de contrato
     let horasMax = 40;
     if (tipoContrato === 'Medio tiempo (20h)') horasMax = 20;
     if (tipoContrato === 'Por horas') horasMax = 0;
@@ -158,7 +162,6 @@ export default function Home() {
     const tarifaClaseVal = tipoContrato === 'Por horas' ? Number(tarifaClase) || 0 : 0;
     const tarifaAdminVal = tipoContrato === 'Por horas' ? Number(tarifaAdmin) || 0 : 0;
 
-    // 1. Guardar en tabla profesores
     const { data: nuevoProf, error: errorProf } = await supabase
       .from('profesores')
       .insert([
@@ -182,7 +185,6 @@ export default function Home() {
       return;
     }
 
-    // 2. Asociar materias
     const relacionesMaterias = materiasSeleccionadas.map((matNombre) => {
       const matObj = materiasDB.find((m) => m.nombre === matNombre);
       return {
@@ -196,7 +198,6 @@ export default function Home() {
     if (errorRel) {
       alert('Error asociando materias: ' + errorRel.message);
     } else {
-      // Limpiar formulario
       setNombre('');
       setApellido('');
       setEmail('');
@@ -342,21 +343,43 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Matriz de Disponibilidad Horaria (Incluyendo Domingo) */}
+        {/* Matriz de Disponibilidad Horaria con Selección de Día Completo */}
         <div className="space-y-3">
-          <label className="block text-sm font-medium text-slate-300">
-            Disponibilidad Horaria (Selecciona los bloques disponibles):
-          </label>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <label className="block text-sm font-medium text-slate-300">
+              Disponibilidad Horaria:
+            </label>
+            <span className="text-xs text-slate-400 italic">
+              * Usa el botón en el encabezado del día para marcar todo el día completo.
+            </span>
+          </div>
+
           <div className="overflow-x-auto border border-slate-700 rounded-lg bg-slate-800/30 p-4">
             <table className="w-full text-xs text-center border-collapse">
               <thead>
                 <tr>
                   <th className="p-2 border-b border-slate-700 text-slate-400">Franja Horaria</th>
-                  {DIAS_SEMANA.map((dia) => (
-                    <th key={dia} className="p-2 border-b border-slate-700 text-slate-300 font-semibold">
-                      {dia}
-                    </th>
-                  ))}
+                  {DIAS_SEMANA.map((dia) => {
+                    const horasDia = disponibilidad[dia] || [];
+                    const estaTodoCompleto = BLOQUES_HORARIOS.every((b) => horasDia.includes(b));
+
+                    return (
+                      <th key={dia} className="p-2 border-b border-slate-700 space-y-1">
+                        <div className="text-slate-300 font-semibold">{dia}</div>
+                        <button
+                          type="button"
+                          onClick={() => toggleDiaCompleto(dia)}
+                          className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                            estaTodoCompleto
+                              ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500'
+                              : 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600'
+                          }`}
+                        >
+                          {estaTodoCompleto ? '✓ Día Completo' : '+ Día Completo'}
+                        </button>
+                      </th>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
