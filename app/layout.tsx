@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Sistema de Horarios y Gestión Académica',
-  description: 'Sistema de gestión de docentes, cursos, paralelos, calendarios académicos y asignación de horarios',
+  title: 'Sistema Integrado de Horarios y Gestión Académica',
+  description: 'Plataforma completa para docentes, cursos, calendarios, asignación e impresión de horarios.',
 };
 
 export default function RootLayout({
@@ -25,30 +25,33 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-50 min-h-screen text-slate-900`}>
-        {/* Barra de Navegación Global */}
+        {/* Navigation Bar */}
         <nav className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-50 shadow-md">
-          <div className="max-w-6xl mx-auto px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
             <span className="font-bold text-lg tracking-wide text-blue-400">
-              Sistema Académico
+              Sistema Académico Integrado
             </span>
             <div className="flex flex-wrap justify-center space-x-6 text-sm font-medium">
               <a href="/" className="hover:text-blue-400 transition-colors">
-                Gestión de Docentes
+                Docentes
               </a>
               <a href="/cursos" className="hover:text-blue-400 transition-colors">
-                Gestión de Cursos
+                Cursos y Mallas
               </a>
               <a href="/feriados" className="hover:text-blue-400 transition-colors">
-                Feriados y Calendario
+                Calendario / Feriados
               </a>
               <a href="/asignacion" className="hover:text-blue-400 transition-colors">
-                Asignación de Horarios
+                Asignación Automática
+              </a>
+              <a href="/horario-consolidado" className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded-lg transition-colors">
+                📊 Horario Consolidado
               </a>
             </div>
           </div>
         </nav>
 
-        {/* Contenido dinámico de cada página */}
+        {/* Dynamic Content */}
         <div className="py-6">{children}</div>
       </body>
     </html>
