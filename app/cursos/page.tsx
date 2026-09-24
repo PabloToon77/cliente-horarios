@@ -61,8 +61,8 @@ const APERTURAS_SIERRA = ['RS0', 'RS1', 'RS2', 'RS3', 'IS1', 'IS2', 'IS3', 'IS4'
 const NUMEROS_CURSO = ['01', '02', '03', '04', '05', '06', '07', '08', '09'];
 const ANIO_LECTIVO = '27';
 
-// Opciones Ciclo Costa (Grupo opcional)
-const UNIVERSIDADES = ['UTA', 'ESPE', 'UNACH', 'UTC', 'ESPOCH', 'UCE', 'EPN', 'UNL', 'UCUENCA'];
+// Opciones Ciclo Costa (Se añade ONL)
+const UNIVERSIDADES = ['UTA', 'ESPE', 'UNACH', 'UTC', 'ESPOCH', 'UCE', 'EPN', 'UNL', 'UCUENCA', 'ONL'];
 const GRUPOS = ['Ninguno', 'A', 'B', 'C', 'D', 'E'];
 const PARALELOS = ['A', 'B', 'C', 'D', 'E'];
 
@@ -101,7 +101,7 @@ export default function CursosPage() {
 
   // Campos específicos de Código para Costa
   const [universidad, setUniversidad] = useState(UNIVERSIDADES[0]);
-  const [grupo, setGrupo] = useState('Ninguno'); // 'Ninguno' por defecto (opcional)
+  const [grupo, setGrupo] = useState('Ninguno');
   const [paralelo, setParalelo] = useState(PARALELOS[0]);
 
   // Formulario Malla Curricular y Horarios
