@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
-interface BloqueClase {
+interface BloqueHorario {
   id: string;
   dia: string;
   horaInicio: string;
@@ -12,22 +12,23 @@ interface BloqueClase {
   minutoFin: string;
 }
 
+interface Taller {
+  nombre: string;
+  clases: number;
+}
+
 interface Curso {
   id: number;
   nombre: string;
   sede: string;
-  jornada: string;
-  estado: string;
   aula_fisica: string;
   periodo_lectivo: string;
-  fecha_inicio?: string;
-  fecha_fin?: string;
-  horario_json?: BloqueClase[];
+  estado: string;
   malla_json?: Record<string, number>;
-  talleres_json?: Array<{ nombre: string; clases: number }>;
+  talleres_json?: Taller[];
+  horario_json?: BloqueHorario[];
 }
 
-// Lista actualizada de sedes incluyendo las nuevas opciones
 const SEDES = [
   'Ambato',
   'Quito',
@@ -46,71 +47,47 @@ const SEDES = [
   'Tena',
 ];
 
-const JORNADAS = [
-  'Matutina (08:00 - 12:00)',
-  'Vespertina (14:00 - 18:00)',
-  'Nocturna (18:00 - 21:00)',
-  'Intensivo Fin de Semana',
-];
+const PERIODOS = ['Ciclo Sierra', 'Ciclo Costa'];
 
 const MATERIAS_BASE = [
   'Matemáticas',
-  'Química',
   'Física',
+  'Química',
   'Biología',
-  'Lengua',
-  'Ciencias Sociales',
-  'Razonamiento Numérico',
-  'Razonamiento Verbal',
-  'Razonamiento Lógico',
+  'Lengua y Literatura',
+  'Historia / Ciencias Sociales',
+  'Inglés',
+  'Abstracto / Razonamiento',
+  'Lógico',
+  'Verbal',
 ];
 
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
-// Horas de 00 a 23
-const HORAS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
-
-// Minutos de 5 en 5 (00, 05, 10, ..., 55)
-const MINUTOS = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
-
 export default function CursosPage() {
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Estado para edición
   const [cursoEditandoId, setCursoEditandoId] = useState<number | null>(null);
 
-  // Campos básicos del formulario
+  // Formulario de Datos Generales
   const [nombre, setNombre] = useState('');
-  const [sede, setSede] = useState('Ambato');
-  const [jornada, setJornada] = useState(JORNADAS[0]);
-  const [estado, setEstado] = useState('Activo');
+  const [sede, setSede] = useState(SEDES[0]);
   const [aulaFisica, setAulaFisica] = useState('');
-  const [periodoLectivo, setPeriodoLectivo] = useState('2026-I');
-  const [fechaInicio, setFechaInicio] = useState('');
-  const [fechaFin, setFechaFin] = useState('');
+  const [periodoLectivo, setPeriodoLectivo] = useState(PERIODOS[0]);
+  const [estado, setEstado] = useState('Activo');
 
-  // Cantidad de clases por materia
-  const [clasesMaterias, setClasesMaterias] = useState<Record<string, number>>({});
+  // Formulario Malla Curricular
+  const [malla, setMalla] = useState<Record<string, number>>({});
 
-  // Lista de talleres
-  const [talleres, setTalleres] = useState<Array<{ nombre: string; clases: number }>>([]);
-  const [nuevoTallerNombre, setNuevoTallerNombre] = useState('');
-  const [nuevoTallerClases, setNuevoTallerClases] = useState<number | ''>('');
+  // Formulario Talleres
+  const [talleres, setTalleres] = useState<Taller[]>([]);
 
-  // Lista de Bloques de Clase
-  const [bloques, setBloques] = useState<BloqueClase[]>([]);
-
-  // Campos para nuevo bloque de clase
-  const [diaSel, setDiaSel] = useState('Lunes');
-  const [hInicioSel, setHInicioSel] = useState('08');
-  const [mInicioSel, setMInicioSel] = useState('00');
-  const [hFinSel, setHFinSel] = useState('09');
-  const [mFinSel, setMFinSel] = useState('00');
+  // Formulario Horario
+  const [horarios, setHorarios] = useState<BloqueHorario[]>([]);
 
   const cargarCursos = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('cursos').select('*').order('id', { ascending: false });
+    const { data, error } = await supabase.from('cursos').select('*').order('nombre');
     if (error) console.error('Error cargando cursos:', error);
     else setCursos(data || []);
     setLoading(false);
@@ -120,219 +97,163 @@ export default function CursosPage() {
     cargarCursos();
   }, []);
 
-  // Agregar bloque manual
-  const handleAgregarClase = () => {
-    const inicioMin = Number(hInicioSel) * 60 + Number(mInicioSel);
-    const finMin = Number(hFinSel) * 60 + Number(mFinSel);
-
-    if (finMin <= inicioMin) {
-      alert('La hora de fin debe ser posterior a la hora de inicio.');
-      return;
-    }
-
-    const nuevoBloque: BloqueClase = {
-      id: Math.random().toString(36).substring(2, 9),
-      dia: diaSel,
-      horaInicio: hInicioSel,
-      minutoInicio: mInicioSel,
-      horaFin: hFinSel,
-      minutoFin: mFinSel,
-    };
-
-    setBloques([...bloques, nuevoBloque]);
-  };
-
-  // Duplicar bloque de clase
-  const handleDuplicarClase = (bloque: BloqueClase) => {
-    const bloqueDuplicado: BloqueClase = {
-      ...bloque,
-      id: Math.random().toString(36).substring(2, 9),
-    };
-    setBloques([...bloques, bloqueDuplicado]);
-  };
-
-  // Eliminar bloque de clase
-  const handleEliminarClase = (id: string) => {
-    setBloques(bloques.filter((b) => b.id !== id));
-  };
-
-  // Asignar clases por materia
-  const handleMateriaClasesChange = (materia: string, valor: number) => {
-    setClasesMaterias({
-      ...clasesMaterias,
-      [materia]: Math.max(0, valor),
-    });
-  };
-
-  // Agregar Taller
-  const handleAgregarTaller = () => {
-    if (!nuevoTallerNombre.trim() || !nuevoTallerClases || Number(nuevoTallerClases) <= 0) {
-      alert('Ingresa un nombre y número de clases válido para el taller.');
-      return;
-    }
-
-    setTalleres([
-      ...talleres,
-      { nombre: nuevoTallerNombre.trim(), clases: Number(nuevoTallerClases) },
-    ]);
-    setNuevoTallerNombre('');
-    setNuevoTallerClases('');
-  };
-
-  const handleEliminarTaller = (index: number) => {
-    setTalleres(talleres.filter((_, i) => i !== index));
-  };
-
   const limpiarFormulario = () => {
     setCursoEditandoId(null);
     setNombre('');
-    setSede('Ambato');
-    setJornada(JORNADAS[0]);
-    setEstado('Activo');
+    setSede(SEDES[0]);
     setAulaFisica('');
-    setPeriodoLectivo('2026-I');
-    setFechaInicio('');
-    setFechaFin('');
-    setClasesMaterias({});
+    setPeriodoLectivo(PERIODOS[0]);
+    setEstado('Activo');
+    setMalla({});
     setTalleres([]);
-    setBloques([]);
+    setHorarios([]);
   };
 
-  // Cargar datos de un curso en el formulario para editar
-  const handleEditarCurso = (c: Curso) => {
+  const handleMallaChange = (materia: string, cantidad: number) => {
+    setMalla((prev) => ({
+      ...prev,
+      [materia]: Math.max(0, cantidad),
+    }));
+  };
+
+  // Talleres Handlers
+  const agregarTaller = () => {
+    setTalleres((prev) => [...prev, { nombre: '', clases: 1 }]);
+  };
+
+  const actualizarTaller = (index: number, campo: keyof Taller, valor: any) => {
+    setTalleres((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [campo]: valor };
+      return copy;
+    });
+  };
+
+  const eliminarTaller = (index: number) => {
+    setTalleres((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Horario Handlers
+  const agregarBloqueHorario = () => {
+    const nuevo: BloqueHorario = {
+      id: Date.now().toString(),
+      dia: 'Lunes',
+      horaInicio: '08',
+      minutoInicio: '00',
+      horaFin: '09',
+      minutoFin: '30',
+    };
+    setHorarios((prev) => [...prev, nuevo]);
+  };
+
+  const duplicarBloqueHorario = (bloque: BloqueHorario) => {
+    const duplicado: BloqueHorario = {
+      ...bloque,
+      id: Date.now().toString(),
+    };
+    setHorarios((prev) => [...prev, duplicado]);
+  };
+
+  const actualizarBloqueHorario = (id: string, campo: keyof BloqueHorario, valor: string) => {
+    setHorarios((prev) =>
+      prev.map((b) => (b.id === id ? { ...b, [campo]: valor } : b))
+    );
+  };
+
+  const eliminarBloqueHorario = (id: string) => {
+    setHorarios((prev) => prev.filter((b) => b.id !== id));
+  };
+
+  const handleEditar = (c: Curso) => {
     setCursoEditandoId(c.id);
-    setNombre(c.nombre || '');
-    setSede(c.sede || 'Ambato');
-    setJornada(c.jornada || JORNADAS[0]);
-    setEstado(c.estado || 'Activo');
+    setNombre(c.nombre);
+    setSede(c.sede);
     setAulaFisica(c.aula_fisica || '');
-    setPeriodoLectivo(c.periodo_lectivo || '2026-I');
-    setFechaInicio(c.fecha_inicio || '');
-    setFechaFin(c.fecha_fin || '');
-    setClasesMaterias(c.malla_json || {});
+    setPeriodoLectivo(c.periodo_lectivo || PERIODOS[0]);
+    setEstado(c.estado || 'Activo');
+    setMalla(c.malla_json || {});
     setTalleres(c.talleres_json || []);
-    setBloques(c.horario_json || []);
+    setHorarios(c.horario_json || []);
 
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Eliminar un curso
-  const handleEliminarCurso = async (id: number, nombreCurso: string) => {
-    const confirmar = window.confirm(`¿Estás seguro de que deseas eliminar el curso "${nombreCurso}"?`);
-    if (!confirmar) return;
+  const handleEliminar = async (id: number, nombreCurso: string) => {
+    if (!confirm(`¿Eliminar el curso/paralelo "${nombreCurso}"?`)) return;
 
     const { error } = await supabase.from('cursos').delete().eq('id', id);
-
-    if (error) {
-      alert('Error eliminando curso: ' + error.message);
-    } else {
-      alert('Curso eliminado con éxito.');
-      if (cursoEditandoId === id) {
-        limpiarFormulario();
-      }
+    if (error) alert('Error eliminando curso: ' + error.message);
+    else {
+      if (cursoEditandoId === id) limpiarFormulario();
       cargarCursos();
     }
   };
 
-  // Guardar (Crear o Actualizar)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (cursoEditandoId) {
-      // ACTUALIZAR CURSO EXISTENTE
-      const { error } = await supabase
-        .from('cursos')
-        .update({
-          nombre,
-          sede,
-          jornada,
-          estado,
-          aula_fisica: aulaFisica,
-          periodo_lectivo: periodoLectivo,
-          fecha_inicio: fechaInicio || null,
-          fecha_fin: fechaFin || null,
-          malla_json: clasesMaterias,
-          talleres_json: talleres,
-          horario_json: bloques,
-        })
-        .eq('id', cursoEditandoId);
+    const cursoData = {
+      nombre,
+      sede,
+      aula_fisica: aulaFisica,
+      periodo_lectivo: periodoLectivo,
+      estado,
+      malla_json: malla,
+      talleres_json: talleres,
+      horario_json: horarios,
+    };
 
-      if (error) {
-        alert('Error actualizando curso: ' + error.message);
-      } else {
-        alert('¡Curso actualizado con éxito!');
+    if (cursoEditandoId) {
+      const { error } = await supabase.from('cursos').update(cursoData).eq('id', cursoEditandoId);
+
+      if (error) alert('Error actualizando curso: ' + error.message);
+      else {
+        alert('Curso actualizado con éxito.');
         limpiarFormulario();
         cargarCursos();
       }
     } else {
-      // CREAR NUEVO CURSO
-      const { error } = await supabase.from('cursos').insert([
-        {
-          nombre,
-          sede,
-          jornada,
-          estado,
-          aula_fisica: aulaFisica,
-          periodo_lectivo: periodoLectivo,
-          fecha_inicio: fechaInicio || null,
-          fecha_fin: fechaFin || null,
-          malla_json: clasesMaterias,
-          talleres_json: talleres,
-          horario_json: bloques,
-        },
-      ]);
+      const { error } = await supabase.from('cursos').insert([cursoData]);
 
-      if (error) {
-        alert('Error guardando curso: ' + error.message);
-      } else {
-        alert('¡Curso guardado con éxito!');
+      if (error) alert('Error creando curso: ' + error.message);
+      else {
+        alert('Curso guardado con éxito.');
         limpiarFormulario();
         cargarCursos();
       }
     }
   };
+
+  // Horas y Minutos con intervalos de 5 min
+  const HORAS = Array.from({ length: 16 }, (_, i) => String(i + 6).padStart(2, '0')); // 06:00 a 21:00
+  const MINUTOS = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0')); // 00, 05, 10, ..., 55
 
   return (
     <main className="max-w-6xl mx-auto p-6 space-y-8">
       <h1 className="text-3xl font-bold text-slate-800">Gestión de Cursos y Paralelos</h1>
 
+      {/* Formulario Principal */}
       <form onSubmit={handleSubmit} className="bg-slate-900 p-6 rounded-xl space-y-6 text-white shadow-lg">
         <div className="flex justify-between items-center border-b border-slate-700 pb-2">
           <h2 className="text-xl font-semibold">
-            {cursoEditandoId ? '✏️ Editar Curso / Grupo' : 'Crear Nuevo Curso / Grupo'}
+            {cursoEditandoId ? '✏️ Editar Curso / Paralelo' : 'Crear Nuevo Curso / Paralelo'}
           </h2>
           {cursoEditandoId && (
-            <button
-              type="button"
-              onClick={limpiarFormulario}
-              className="text-xs text-slate-400 hover:text-white underline"
-            >
-              Cancelar Edición
+            <button type="button" onClick={limpiarFormulario} className="text-xs text-slate-400 hover:text-white underline">
+              Cancelar
             </button>
           )}
         </div>
 
-        {/* Información Básica */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="md:col-span-2">
-            <label className="block text-xs text-slate-400 mb-1">Nombre del Curso / Grupo</label>
+        {/* Datos Generales */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Nombre del Curso / Paralelo</label>
             <input
               type="text"
-              placeholder="Ej. Preuniversitario Intensivo - Grupo A"
+              placeholder="Ej. Grupo intensivo UNAM / Paralelo A"
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
-              required
-              className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">Período Lectivo</label>
-            <input
-              type="text"
-              placeholder="Ej. 2026-I / Costa 2026"
-              value={periodoLectivo}
-              onChange={(e) => setPeriodoLectivo(e.target.value)}
               required
               className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500"
             />
@@ -352,7 +273,31 @@ export default function CursosPage() {
           </div>
 
           <div>
-            <label className="block text-xs text-slate-400 mb-1">Estado del Curso</label>
+            <label className="block text-xs text-slate-400 mb-1">Aula Física</label>
+            <input
+              type="text"
+              placeholder="Ej. Aula 102 / Laboratorio 1"
+              value={aulaFisica}
+              onChange={(e) => setAulaFisica(e.target.value)}
+              className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Período Lectivo</label>
+            <select
+              value={periodoLectivo}
+              onChange={(e) => setPeriodoLectivo(e.target.value)}
+              className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500"
+            >
+              {PERIODOS.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Estado</label>
             <select
               value={estado}
               onChange={(e) => setEstado(e.target.value)}
@@ -362,355 +307,240 @@ export default function CursosPage() {
               <option value="Cerrado">Cerrado</option>
             </select>
           </div>
-
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">Jornada / Horario</label>
-            <select
-              value={jornada}
-              onChange={(e) => setJornada(e.target.value)}
-              className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500"
-            >
-              {JORNADAS.map((j) => (
-                <option key={j} value={j}>{j}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">Nombre del Aula Física</label>
-            <input
-              type="text"
-              placeholder="Ej. Aula 102 / Lab 3"
-              value={aulaFisica}
-              onChange={(e) => setAulaFisica(e.target.value)}
-              required
-              className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">Fecha de Inicio</label>
-            <input
-              type="date"
-              value={fechaInicio}
-              onChange={(e) => setFechaInicio(e.target.value)}
-              className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">Fecha de Finalización</label>
-            <input
-              type="date"
-              value={fechaFin}
-              onChange={(e) => setFechaFin(e.target.value)}
-              className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500"
-            />
-          </div>
         </div>
 
-        {/* Malla Curricular por Materias */}
-        <div className="space-y-3">
-          <label className="block text-sm font-medium text-slate-300">
-            Malla Curricular (Clases requeridas por Materia):
-          </label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 bg-slate-800/40 p-4 rounded-lg border border-slate-700">
-            {MATERIAS_BASE.map((materia) => (
-              <div key={materia} className="flex items-center justify-between bg-slate-800 p-2.5 rounded border border-slate-700">
-                <span className="text-xs text-slate-200 font-medium">{materia}</span>
-                <div className="flex items-center space-x-1">
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="0"
-                    value={clasesMaterias[materia] || ''}
-                    onChange={(e) => handleMateriaClasesChange(materia, Number(e.target.value))}
-                    className="w-16 p-1 text-center text-xs bg-slate-900 border border-slate-700 rounded text-white focus:outline-none focus:border-blue-500"
-                  />
-                  <span className="text-[10px] text-slate-400">clases</span>
-                </div>
+        {/* Configuración de la Malla Curricular */}
+        <div className="border-t border-slate-700 pt-4 space-y-3">
+          <h3 className="font-semibold text-slate-200 text-sm">
+            📚 Malla Curricular (Clases semanales requeridas por materia)
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+            {MATERIAS_BASE.map((m) => (
+              <div key={m} className="bg-slate-800 p-2.5 rounded-lg border border-slate-700">
+                <label className="block text-[11px] text-slate-300 font-medium truncate mb-1" title={m}>
+                  {m}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  value={malla[m] ?? ''}
+                  onChange={(e) => handleMallaChange(m, Number(e.target.value))}
+                  className="w-full p-1.5 text-center rounded bg-slate-900 border border-slate-700 text-white font-mono text-xs focus:outline-none focus:border-blue-500"
+                />
               </div>
             ))}
           </div>
         </div>
 
         {/* Talleres Especiales */}
-        <div className="space-y-3">
-          <label className="block text-sm font-medium text-slate-300">
-            Agregar Talleres Especiales (Opcional):
-          </label>
-          <div className="bg-slate-800/40 p-4 rounded-lg border border-slate-700 space-y-3">
-            <div className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="text"
-                placeholder="Nombre del Taller (Ej. Taller de Orientación Vocacional)"
-                value={nuevoTallerNombre}
-                onChange={(e) => setNuevoTallerNombre(e.target.value)}
-                className="flex-1 p-2 rounded bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none focus:border-blue-500"
-              />
-              <input
-                type="number"
-                min="1"
-                placeholder="N° de clases"
-                value={nuevoTallerClases}
-                onChange={(e) => setNuevoTallerClases(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-28 p-2 rounded bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none focus:border-blue-500"
-              />
-              <button
-                type="button"
-                onClick={handleAgregarTaller}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-2 rounded font-medium transition-colors"
-              >
-                + Agregar Taller
-              </button>
-            </div>
-
-            {talleres.length > 0 && (
-              <div className="flex flex-wrap gap-2 pt-2">
-                {talleres.map((t, index) => (
-                  <span
-                    key={index}
-                    className="inline-flex items-center space-x-2 bg-slate-800 border border-emerald-500/50 text-emerald-300 text-xs px-3 py-1 rounded-full"
-                  >
-                    <span>{t.nombre} ({t.clases} clases)</span>
-                    <button
-                      type="button"
-                      onClick={() => handleEliminarTaller(index)}
-                      className="text-slate-400 hover:text-red-400 font-bold ml-1"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Selector de Horarios Manual */}
-        <div className="space-y-4">
-          <label className="block text-sm font-medium text-slate-300">
-            Horario de Clases (Agregar bloques de hora manualmente):
-          </label>
-
-          <div className="bg-slate-800/60 p-4 rounded-xl border border-slate-700 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">Día de la semana</label>
-                <select
-                  value={diaSel}
-                  onChange={(e) => setDiaSel(e.target.value)}
-                  className="w-full p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white"
-                >
-                  {DIAS_SEMANA.map((d) => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">Hora de Inicio</label>
-                <div className="flex items-center space-x-1">
-                  <select
-                    value={hInicioSel}
-                    onChange={(e) => setHInicioSel(e.target.value)}
-                    className="w-1/2 p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white"
-                  >
-                    {HORAS.map((h) => (
-                      <option key={h} value={h}>{h} h</option>
-                    ))}
-                  </select>
-                  <span>:</span>
-                  <select
-                    value={mInicioSel}
-                    onChange={(e) => setMInicioSel(e.target.value)}
-                    className="w-1/2 p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white"
-                  >
-                    {MINUTOS.map((m) => (
-                      <option key={m} value={m}>{m} min</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs text-slate-400 mb-1">Hora de Fin</label>
-                <div className="flex items-center space-x-1">
-                  <select
-                    value={hFinSel}
-                    onChange={(e) => setHFinSel(e.target.value)}
-                    className="w-1/2 p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white"
-                  >
-                    {HORAS.map((h) => (
-                      <option key={h} value={h}>{h} h</option>
-                    ))}
-                  </select>
-                  <span>:</span>
-                  <select
-                    value={mFinSel}
-                    onChange={(e) => setMFinSel(e.target.value)}
-                    className="w-1/2 p-2 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white"
-                  >
-                    {MINUTOS.map((m) => (
-                      <option key={m} value={m}>{m} min</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-
+        <div className="border-t border-slate-700 pt-4 space-y-3">
+          <div className="flex justify-between items-center">
+            <h3 className="font-semibold text-slate-200 text-sm">🛠️ Talleres Adicionales / Módulos Especiales</h3>
             <button
               type="button"
-              onClick={handleAgregarClase}
-              className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-5 py-2.5 rounded-lg font-medium transition-colors"
+              onClick={agregarTaller}
+              className="text-xs bg-slate-800 hover:bg-slate-700 text-blue-400 px-3 py-1 rounded border border-slate-700 transition-colors"
             >
-              + Agregar Clase
+              + Agregar Taller
             </button>
           </div>
 
-          <div className="space-y-2">
-            <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Clases Programadas ({bloques.length})
-            </h4>
-
-            {bloques.length === 0 ? (
-              <p className="text-xs text-slate-500 italic">No has agregado bloques de clase todavía.</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                {bloques.map((b) => (
-                  <div
-                    key={b.id}
-                    className="flex items-center justify-between bg-slate-800 border border-slate-700 p-3 rounded-lg text-xs"
+          {talleres.length > 0 && (
+            <div className="space-y-2">
+              {talleres.map((t, idx) => (
+                <div key={idx} className="flex items-center space-x-2 bg-slate-800 p-2 rounded-lg border border-slate-700">
+                  <input
+                    type="text"
+                    placeholder="Nombre del Taller (Ej. Orientación Vocacional)"
+                    value={t.nombre}
+                    onChange={(e) => actualizarTaller(idx, 'nombre', e.target.value)}
+                    className="flex-1 p-1.5 text-xs rounded bg-slate-900 border border-slate-700 text-white focus:outline-none"
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="Clases"
+                    value={t.clases}
+                    onChange={(e) => actualizarTaller(idx, 'clases', Number(e.target.value))}
+                    className="w-20 p-1.5 text-xs text-center rounded bg-slate-900 border border-slate-700 text-white focus:outline-none font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => eliminarTaller(idx)}
+                    className="text-red-400 hover:text-red-300 px-2 text-xs"
                   >
-                    <div>
-                      <span className="font-bold text-blue-400 block">{b.dia}</span>
-                      <span className="font-mono text-slate-200">
-                        {b.horaInicio}:{b.minutoInicio} - {b.horaFin}:{b.minutoFin}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        type="button"
-                        onClick={() => handleDuplicarClase(b)}
-                        title="Duplicar esta clase"
-                        className="bg-slate-700 hover:bg-slate-600 text-slate-200 px-2 py-1 rounded text-[10px] font-medium transition-colors"
-                      >
-                        📋 Duplicar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleEliminarClase(b.id)}
-                        title="Eliminar clase"
-                        className="text-slate-400 hover:text-red-400 font-bold px-1"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                    🗑️
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <div className="flex gap-3">
+        {/* Programación de Horario de Clases */}
+        <div className="border-t border-slate-700 pt-4 space-y-3">
+          <div className="flex justify-between items-center">
+            <h3 className="font-semibold text-slate-200 text-sm">
+              ⏱️ Bloques y Horarios de Clases Programados
+            </h3>
+            <button
+              type="button"
+              onClick={agregarBloqueHorario}
+              className="text-xs bg-slate-800 hover:bg-slate-700 text-emerald-400 px-3 py-1 rounded border border-slate-700 transition-colors"
+            >
+              + Agregar Bloque Horario
+            </button>
+          </div>
+
+          {horarios.length > 0 && (
+            <div className="space-y-2">
+              {horarios.map((b) => (
+                <div key={b.id} className="flex flex-wrap items-center gap-2 bg-slate-800 p-2.5 rounded-lg border border-slate-700 text-xs">
+                  <select
+                    value={b.dia}
+                    onChange={(e) => actualizarBloqueHorario(b.id, 'dia', e.target.value)}
+                    className="p-1.5 rounded bg-slate-900 border border-slate-700 text-white focus:outline-none"
+                  >
+                    {DIAS_SEMANA.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+
+                  <span className="text-slate-400">Inicio:</span>
+                  <select
+                    value={b.horaInicio}
+                    onChange={(e) => actualizarBloqueHorario(b.id, 'horaInicio', e.target.value)}
+                    className="p-1 rounded bg-slate-900 border border-slate-700 text-white font-mono"
+                  >
+                    {HORAS.map((h) => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                  :
+                  <select
+                    value={b.minutoInicio}
+                    onChange={(e) => actualizarBloqueHorario(b.id, 'minutoInicio', e.target.value)}
+                    className="p-1 rounded bg-slate-900 border border-slate-700 text-white font-mono"
+                  >
+                    {MINUTOS.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+
+                  <span className="text-slate-400 ml-2">Fin:</span>
+                  <select
+                    value={b.horaFin}
+                    onChange={(e) => actualizarBloqueHorario(b.id, 'horaFin', e.target.value)}
+                    className="p-1 rounded bg-slate-900 border border-slate-700 text-white font-mono"
+                  >
+                    {HORAS.map((h) => (
+                      <option key={h} value={h}>{h}</option>
+                    ))}
+                  </select>
+                  :
+                  <select
+                    value={b.minutoFin}
+                    onChange={(e) => actualizarBloqueHorario(b.id, 'minutoFin', e.target.value)}
+                    className="p-1 rounded bg-slate-900 border border-slate-700 text-white font-mono"
+                  >
+                    {MINUTOS.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+
+                  <div className="flex space-x-2 ml-auto">
+                    <button
+                      type="button"
+                      onClick={() => duplicarBloqueHorario(b)}
+                      className="bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded text-[11px]"
+                    >
+                      📋 Duplicar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => eliminarBloqueHorario(b.id)}
+                      className="text-red-400 hover:text-red-300 px-2"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3 pt-2">
           <button
             type="submit"
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-medium transition-colors text-base shadow-md"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-lg font-medium transition-colors"
           >
             {cursoEditandoId ? 'Actualizar Curso' : 'Guardar Curso'}
           </button>
-          {cursoEditandoId && (
-            <button
-              type="button"
-              onClick={limpiarFormulario}
-              className="bg-slate-700 hover:bg-slate-600 text-white px-6 py-3 rounded-lg font-medium transition-colors text-base"
-            >
-              Cancelar
-            </button>
-          )}
         </div>
       </form>
 
-      {/* Lista de Cursos Registrados */}
+      {/* Lista de Cursos */}
       <div className="space-y-4">
-        <h2 className="text-2xl font-semibold text-slate-800">Cursos Registrados</h2>
+        <h2 className="text-2xl font-semibold text-slate-800">Cursos y Paralelos Registrados</h2>
         {loading ? (
           <p className="text-slate-500">Cargando cursos...</p>
         ) : cursos.length === 0 ? (
-          <p className="text-slate-500 italic">No hay cursos registrados aún.</p>
+          <p className="text-slate-500 italic">No hay cursos o paralelos registrados.</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {cursos.map((c) => (
-              <div key={c.id} className="border border-slate-200 p-5 rounded-xl bg-white shadow-sm space-y-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-bold text-slate-900 text-lg">{c.nombre}</h3>
-                    <p className="text-xs text-slate-500">
-                      Aula: <span className="font-medium text-slate-700">{c.aula_fisica}</span>
-                      {c.periodo_lectivo && (
-                        <span className="ml-2 bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono text-[10px]">
-                          {c.periodo_lectivo}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <span className="bg-blue-50 text-blue-700 text-xs px-2.5 py-0.5 rounded-full font-semibold border border-blue-200">
-                      {c.sede}
-                    </span>
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded font-bold ${
-                        c.estado === 'Activo'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-slate-100 text-slate-600'
-                      }`}
-                    >
-                      {c.estado || 'Activo'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="text-xs text-slate-600 space-y-1 bg-slate-50 p-2.5 rounded border border-slate-100">
-                  <p>Jornada: <span className="font-medium text-slate-800">{c.jornada}</span></p>
-                  {c.fecha_inicio && c.fecha_fin && (
-                    <p>Período: <span className="font-medium text-slate-800">{c.fecha_inicio} al {c.fecha_fin}</span></p>
-                  )}
-                </div>
-
-                {/* Resumen de Clases Programadas */}
-                {c.horario_json && Array.isArray(c.horario_json) && c.horario_json.length > 0 && (
-                  <div className="text-xs space-y-1">
-                    <span className="font-semibold text-slate-700 block">Horario Agendado ({c.horario_json.length} clases):</span>
-                    <div className="flex flex-wrap gap-1">
-                      {c.horario_json.map((b, i) => (
-                        <span key={i} className="bg-slate-100 text-slate-700 border border-slate-200 px-2 py-0.5 rounded text-[10px]">
-                          {b.dia} {b.horaInicio}:{b.minutoInicio}-{b.horaFin}:{b.minutoFin}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Botones de Acciones: Editar y Eliminar */}
-                <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => handleEditarCurso(c)}
-                    className="bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 text-xs px-3 py-1.5 rounded font-medium transition-colors"
-                  >
-                    ✏️ Editar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleEliminarCurso(c.id, c.nombre)}
-                    className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 text-xs px-3 py-1.5 rounded font-medium transition-colors"
-                  >
-                    🗑️ Eliminar
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm bg-white">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-slate-100 text-slate-700 text-sm">
+                <tr>
+                  <th className="p-3.5 border-b">Curso / Paralelo</th>
+                  <th className="p-3.5 border-b">Sede</th>
+                  <th className="p-3.5 border-b">Aula Física</th>
+                  <th className="p-3.5 border-b">Período</th>
+                  <th className="p-3.5 border-b">Estado</th>
+                  <th className="p-3.5 border-b text-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-sm">
+                {cursos.map((c) => (
+                  <tr key={c.id} className="hover:bg-slate-50">
+                    <td className="p-3.5 font-bold text-slate-900">{c.nombre}</td>
+                    <td className="p-3.5 text-slate-700 font-medium">{c.sede}</td>
+                    <td className="p-3.5 text-slate-600">{c.aula_fisica || 'Sin aula'}</td>
+                    <td className="p-3.5 text-slate-600">{c.periodo_lectivo || 'N/A'}</td>
+                    <td className="p-3.5">
+                      <span
+                        className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${
+                          c.estado === 'Activo'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-slate-200 text-slate-700'
+                        }`}
+                      >
+                        {c.estado || 'Activo'}
+                      </span>
+                    </td>
+                    <td className="p-3.5 text-center">
+                      <div className="flex items-center justify-center space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => handleEditar(c)}
+                          className="bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 text-xs px-2.5 py-1 rounded font-medium"
+                        >
+                          ✏️ Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEliminar(c.id, c.nombre)}
+                          className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 text-xs px-2.5 py-1 rounded font-medium"
+                        >
+                          🗑️ Eliminar
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
