@@ -24,6 +24,9 @@ interface Curso {
   apertura?: string;
   numero_curso?: string;
   anio_lectivo?: string;
+  universidad?: string;
+  grupo?: string;
+  paralelo?: string;
   aula_fisica: string;
   periodo_lectivo: string;
   estado: string;
@@ -53,12 +56,15 @@ const MAPEO_SEDES: Record<string, string> = {
 
 const SEDES = Object.keys(MAPEO_SEDES);
 
-// Opciones de Apertura condicionales por Ciclo
+// Opciones Ciclo Sierra
 const APERTURAS_SIERRA = ['RS0', 'RS1', 'RS2', 'RS3', 'IS1', 'IS2', 'IS3', 'IS4'];
-const APERTURAS_COSTA = ['RC0', 'RC1', 'RC2', 'RC3', 'IC1', 'IC2', 'IC3', 'IC4'];
-
 const NUMEROS_CURSO = ['01', '02', '03', '04', '05', '06', '07', '08', '09'];
 const ANIO_LECTIVO = '27';
+
+// Opciones Ciclo Costa (Grupo opcional)
+const UNIVERSIDADES = ['UTA', 'ESPE', 'UNACH', 'UTC', 'ESPOCH', 'UCE', 'EPN', 'UNL', 'UCUENCA'];
+const GRUPOS = ['Ninguno', 'A', 'B', 'C', 'D', 'E'];
+const PARALELOS = ['A', 'B', 'C', 'D', 'E'];
 
 const PERIODOS = ['Ciclo Sierra', 'Ciclo Costa'];
 
@@ -83,37 +89,35 @@ export default function CursosPage() {
   const [loading, setLoading] = useState(true);
   const [cursoEditandoId, setCursoEditandoId] = useState<number | null>(null);
 
-  // Formulario de Datos Generales y Código del Curso
+  // Formulario de Datos Generales
   const [periodoLectivo, setPeriodoLectivo] = useState(PERIODOS[0]);
-  const [apertura, setApertura] = useState(APERTURAS_SIERRA[0]);
   const [sede, setSede] = useState(SEDES[0]);
-  const [numeroCurso, setNumeroCurso] = useState(NUMEROS_CURSO[0]);
   const [aulaFisica, setAulaFisica] = useState('');
   const [estado, setEstado] = useState('Activo');
 
-  // Formulario Malla Curricular
+  // Campos específicos de Código para Sierra
+  const [apertura, setApertura] = useState(APERTURAS_SIERRA[0]);
+  const [numeroCurso, setNumeroCurso] = useState(NUMEROS_CURSO[0]);
+
+  // Campos específicos de Código para Costa
+  const [universidad, setUniversidad] = useState(UNIVERSIDADES[0]);
+  const [grupo, setGrupo] = useState('Ninguno'); // 'Ninguno' por defecto (opcional)
+  const [paralelo, setParalelo] = useState(PARALELOS[0]);
+
+  // Formulario Malla Curricular y Horarios
   const [malla, setMalla] = useState<Record<string, number>>({});
-
-  // Formulario Talleres
   const [talleres, setTalleres] = useState<Taller[]>([]);
-
-  // Formulario Horario
   const [horarios, setHorarios] = useState<BloqueHorario[]>([]);
 
-  // Determinar lista de aperturas dinámicamente
-  const opcionesApertura = periodoLectivo === 'Ciclo Sierra' ? APERTURAS_SIERRA : APERTURAS_COSTA;
+  // Generación dinámica del código según el ciclo (omite grupo si es 'Ninguno')
+  const codigoCosta = grupo && grupo !== 'Ninguno'
+    ? `${MAPEO_SEDES[sede] || 'AMB'}-${universidad}-${grupo}-${paralelo}`
+    : `${MAPEO_SEDES[sede] || 'AMB'}-${universidad}-${paralelo}`;
 
-  const handlePeriodoChange = (nuevoPeriodo: string) => {
-    setPeriodoLectivo(nuevoPeriodo);
-    if (nuevoPeriodo === 'Ciclo Sierra') {
-      setApertura(APERTURAS_SIERRA[0]);
-    } else {
-      setApertura(APERTURAS_COSTA[0]);
-    }
-  };
-
-  // Generación dinámica del código
-  const codigoGenerado = `${apertura}-${MAPEO_SEDES[sede] || 'AMB'}-${numeroCurso}-${ANIO_LECTIVO}`;
+  const codigoGenerado =
+    periodoLectivo === 'Ciclo Sierra'
+      ? `${apertura}-${MAPEO_SEDES[sede] || 'AMB'}-${numeroCurso}-${ANIO_LECTIVO}`
+      : codigoCosta;
 
   const cargarCursos = async () => {
     setLoading(true);
@@ -130,9 +134,12 @@ export default function CursosPage() {
   const limpiarFormulario = () => {
     setCursoEditandoId(null);
     setPeriodoLectivo(PERIODOS[0]);
-    setApertura(APERTURAS_SIERRA[0]);
     setSede(SEDES[0]);
+    setApertura(APERTURAS_SIERRA[0]);
     setNumeroCurso(NUMEROS_CURSO[0]);
+    setUniversidad(UNIVERSIDADES[0]);
+    setGrupo('Ninguno');
+    setParalelo(PARALELOS[0]);
     setAulaFisica('');
     setEstado('Activo');
     setMalla({});
@@ -199,9 +206,12 @@ export default function CursosPage() {
     setCursoEditandoId(c.id);
     const pLectivo = c.periodo_lectivo || PERIODOS[0];
     setPeriodoLectivo(pLectivo);
-    setApertura(c.apertura || (pLectivo === 'Ciclo Sierra' ? APERTURAS_SIERRA[0] : APERTURAS_COSTA[0]));
     setSede(c.sede || SEDES[0]);
+    setApertura(c.apertura || APERTURAS_SIERRA[0]);
     setNumeroCurso(c.numero_curso || NUMEROS_CURSO[0]);
+    setUniversidad(c.universidad || UNIVERSIDADES[0]);
+    setGrupo(c.grupo || 'Ninguno');
+    setParalelo(c.paralelo || PARALELOS[0]);
     setAulaFisica(c.aula_fisica || '');
     setEstado(c.estado || 'Activo');
     setMalla(c.malla_json || {});
@@ -227,11 +237,14 @@ export default function CursosPage() {
 
     const cursoData = {
       codigo: codigoGenerado,
-      nombre: codigoGenerado, // Se almacena el codigo como identificador
-      apertura,
+      nombre: codigoGenerado,
       sede,
+      apertura,
       numero_curso: numeroCurso,
       anio_lectivo: ANIO_LECTIVO,
+      universidad,
+      grupo: grupo === 'Ninguno' ? null : grupo,
+      paralelo,
       aula_fisica: aulaFisica,
       periodo_lectivo: periodoLectivo,
       estado,
@@ -287,7 +300,7 @@ export default function CursosPage() {
             <label className="block text-xs font-semibold text-orange-400 mb-1">Período Lectivo / Ciclo *</label>
             <select
               value={periodoLectivo}
-              onChange={(e) => handlePeriodoChange(e.target.value)}
+              onChange={(e) => setPeriodoLectivo(e.target.value)}
               className="w-full p-2.5 rounded-lg bg-slate-900 border border-orange-500/50 text-white font-semibold focus:outline-none focus:border-orange-500"
             >
               {PERIODOS.map((p) => (
@@ -308,69 +321,127 @@ export default function CursosPage() {
           </div>
         </div>
 
-        {/* Generación de Código Único */}
+        {/* Generación del Código del Curso */}
         <div className="bg-slate-800/60 p-4 rounded-xl border border-slate-700 space-y-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-700/60 pb-3">
             <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Código Único de Curso Generado:
+              Código Único de Curso ({periodoLectivo}):
             </span>
             <div className="bg-[#0052B4] text-white px-4 py-1.5 rounded-lg text-lg font-mono font-extrabold tracking-wider border border-blue-400/30 shadow-inner">
               {codigoGenerado}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-xs text-slate-300 font-semibold mb-1">
-                1. Apertura ({periodoLectivo === 'Ciclo Sierra' ? 'Sierra' : 'Costa'})
-              </label>
-              <select
-                value={apertura}
-                onChange={(e) => setApertura(e.target.value)}
-                className="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono font-bold focus:outline-none focus:border-blue-500"
-              >
-                {opcionesApertura.map((a) => (
-                  <option key={a} value={a}>{a}</option>
-                ))}
-              </select>
-            </div>
+          {/* Formulario Código Ciclo Sierra */}
+          {periodoLectivo === 'Ciclo Sierra' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs text-slate-300 font-semibold mb-1">1. Apertura</label>
+                <select
+                  value={apertura}
+                  onChange={(e) => setApertura(e.target.value)}
+                  className="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono font-bold focus:outline-none focus:border-blue-500"
+                >
+                  {APERTURAS_SIERRA.map((a) => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
+                </select>
+              </div>
 
-            <div>
-              <label className="block text-xs text-slate-300 font-semibold mb-1">2. Sede</label>
-              <select
-                value={sede}
-                onChange={(e) => setSede(e.target.value)}
-                className="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono font-bold focus:outline-none focus:border-blue-500"
-              >
-                {SEDES.map((s) => (
-                  <option key={s} value={s}>{s} ({MAPEO_SEDES[s]})</option>
-                ))}
-              </select>
-            </div>
+              <div>
+                <label className="block text-xs text-slate-300 font-semibold mb-1">2. Sede</label>
+                <select
+                  value={sede}
+                  onChange={(e) => setSede(e.target.value)}
+                  className="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono font-bold focus:outline-none focus:border-blue-500"
+                >
+                  {SEDES.map((s) => (
+                    <option key={s} value={s}>{s} ({MAPEO_SEDES[s]})</option>
+                  ))}
+                </select>
+              </div>
 
-            <div>
-              <label className="block text-xs text-slate-300 font-semibold mb-1">3. Número de Curso</label>
-              <select
-                value={numeroCurso}
-                onChange={(e) => setNumeroCurso(e.target.value)}
-                className="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono font-bold focus:outline-none focus:border-blue-500"
-              >
-                {NUMEROS_CURSO.map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
-            </div>
+              <div>
+                <label className="block text-xs text-slate-300 font-semibold mb-1">3. Número de Curso</label>
+                <select
+                  value={numeroCurso}
+                  onChange={(e) => setNumeroCurso(e.target.value)}
+                  className="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono font-bold focus:outline-none focus:border-blue-500"
+                >
+                  {NUMEROS_CURSO.map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+              </div>
 
-            <div>
-              <label className="block text-xs text-slate-300 font-semibold mb-1">4. Año Lectivo</label>
-              <input
-                type="text"
-                value={ANIO_LECTIVO}
-                disabled
-                className="w-full p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 font-mono font-bold text-center cursor-not-allowed"
-              />
+              <div>
+                <label className="block text-xs text-slate-300 font-semibold mb-1">4. Año Lectivo</label>
+                <input
+                  type="text"
+                  value={ANIO_LECTIVO}
+                  disabled
+                  className="w-full p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 font-mono font-bold text-center cursor-not-allowed"
+                />
+              </div>
             </div>
-          </div>
+          ) : (
+            /* Formulario Código Ciclo Costa */
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-xs text-slate-300 font-semibold mb-1">1. Sede</label>
+                <select
+                  value={sede}
+                  onChange={(e) => setSede(e.target.value)}
+                  className="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono font-bold focus:outline-none focus:border-blue-500"
+                >
+                  {SEDES.map((s) => (
+                    <option key={s} value={s}>{s} ({MAPEO_SEDES[s]})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-300 font-semibold mb-1">2. Universidad</label>
+                <select
+                  value={universidad}
+                  onChange={(e) => setUniversidad(e.target.value)}
+                  className="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono font-bold focus:outline-none focus:border-blue-500"
+                >
+                  {UNIVERSIDADES.map((u) => (
+                    <option key={u} value={u}>{u}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-300 font-semibold mb-1">
+                  3. Grupo <span className="text-slate-400 font-normal">(Opcional)</span>
+                </label>
+                <select
+                  value={grupo}
+                  onChange={(e) => setGrupo(e.target.value)}
+                  className="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono font-bold focus:outline-none focus:border-blue-500"
+                >
+                  {GRUPOS.map((g) => (
+                    <option key={g} value={g}>{g === 'Ninguno' ? 'Ninguno (Sin Grupo)' : `Grupo ${g}`}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-300 font-semibold mb-1">4. Paralelo</label>
+                <select
+                  value={paralelo}
+                  onChange={(e) => setParalelo(e.target.value)}
+                  className="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono font-bold focus:outline-none focus:border-blue-500"
+                >
+                  {PARALELOS.map((p) => (
+                    <option key={p} value={p}>Paralelo {p}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Configuración de la Malla Curricular */}
@@ -404,7 +475,7 @@ export default function CursosPage() {
             <button
               type="button"
               onClick={agregarTaller}
-              className="text-xs bg-slate-800 hover:bg-slate-700 text-blue-400 px-3 py-1 rounded border border-slate-700 transition-colors"
+              className="text-xs bg-slate-800 hover:bg-slate-700 text-blue-400 px-3 py-1 rounded border border-slate-700 transition-colors cursor-pointer"
             >
               + Agregar Taller
             </button>
@@ -432,7 +503,7 @@ export default function CursosPage() {
                   <button
                     type="button"
                     onClick={() => eliminarTaller(idx)}
-                    className="text-red-400 hover:text-red-300 px-2 text-xs"
+                    className="text-red-400 hover:text-red-300 px-2 text-xs cursor-pointer"
                   >
                     🗑️
                   </button>
@@ -451,7 +522,7 @@ export default function CursosPage() {
             <button
               type="button"
               onClick={agregarBloqueHorario}
-              className="text-xs bg-slate-800 hover:bg-slate-700 text-emerald-400 px-3 py-1 rounded border border-slate-700 transition-colors"
+              className="text-xs bg-slate-800 hover:bg-slate-700 text-emerald-400 px-3 py-1 rounded border border-slate-700 transition-colors cursor-pointer"
             >
               + Agregar Bloque Horario
             </button>
@@ -517,14 +588,14 @@ export default function CursosPage() {
                     <button
                       type="button"
                       onClick={() => duplicarBloqueHorario(b)}
-                      className="bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded text-[11px]"
+                      className="bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded text-[11px] cursor-pointer"
                     >
                       📋 Duplicar
                     </button>
                     <button
                       type="button"
                       onClick={() => eliminarBloqueHorario(b.id)}
-                      className="text-red-400 hover:text-red-300 px-2"
+                      className="text-red-400 hover:text-red-300 px-2 cursor-pointer"
                     >
                       🗑️
                     </button>
@@ -560,13 +631,19 @@ export default function CursosPage() {
                   <th className="p-3.5 border-b">Código del Curso</th>
                   <th className="p-3.5 border-b">Sede</th>
                   <th className="p-3.5 border-b">Aula</th>
-                  <th className="p-3.5 border-b">Período</th>
+                  <th className="p-3.5 border-b">Período / Ciclo</th>
                   <th className="p-3.5 border-b text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
                 {cursos.map((c) => {
-                  const codStr = c.codigo || `${c.apertura || 'RS0'}-${MAPEO_SEDES[c.sede] || 'AMB'}-${c.numero_curso || '01'}-27`;
+                  const codStr =
+                    c.codigo ||
+                    (c.periodo_lectivo === 'Ciclo Sierra'
+                      ? `${c.apertura || 'RS0'}-${MAPEO_SEDES[c.sede] || 'AMB'}-${c.numero_curso || '01'}-27`
+                      : c.grupo
+                      ? `${MAPEO_SEDES[c.sede] || 'AMB'}-${c.universidad || 'UTA'}-${c.grupo}-${c.paralelo || 'A'}`
+                      : `${MAPEO_SEDES[c.sede] || 'AMB'}-${c.universidad || 'UTA'}-${c.paralelo || 'A'}`);
 
                   return (
                     <tr key={c.id} className="hover:bg-slate-50">
@@ -577,7 +654,13 @@ export default function CursosPage() {
                       </td>
                       <td className="p-3.5 text-slate-700 font-medium">{c.sede}</td>
                       <td className="p-3.5 text-slate-600">{c.aula_fisica || 'Sin aula'}</td>
-                      <td className="p-3.5 text-slate-600">{c.periodo_lectivo || 'N/A'}</td>
+                      <td className="p-3.5 text-slate-600">
+                        <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${
+                          c.periodo_lectivo === 'Ciclo Sierra' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                        }`}>
+                          {c.periodo_lectivo || 'Ciclo Sierra'}
+                        </span>
+                      </td>
                       <td className="p-3.5 text-center">
                         <div className="flex items-center justify-center space-x-2">
                           <button
