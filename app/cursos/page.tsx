@@ -29,13 +29,13 @@ interface Curso {
   paralelo?: string;
   aula_fisica: string;
   periodo_lectivo: string;
+  etapa?: string;
   estado: string;
   malla_json?: Record<string, number>;
   talleres_json?: Taller[];
   horario_json?: BloqueHorario[];
 }
 
-// Mapeo de Sedes con sus respectivas 3 letras de código (Se añade Online: ONL)
 const MAPEO_SEDES: Record<string, string> = {
   Ambato: 'AMB',
   Quito: 'QUI',
@@ -57,17 +57,16 @@ const MAPEO_SEDES: Record<string, string> = {
 
 const SEDES = Object.keys(MAPEO_SEDES);
 
-// Opciones Ciclo Sierra
 const APERTURAS_SIERRA = ['RS0', 'RS1', 'RS2', 'RS3', 'IS1', 'IS2', 'IS3', 'IS4'];
 const NUMEROS_CURSO = ['01', '02', '03', '04', '05', '06', '07', '08', '09'];
 const ANIO_LECTIVO = '27';
 
-// Opciones Ciclo Costa
 const UNIVERSIDADES = ['UTA', 'ESPE', 'UNACH', 'UTC', 'ESPOCH', 'UCE', 'EPN', 'UNL', 'UCUENCA'];
 const GRUPOS = ['Ninguno', 'A', 'B', 'C', 'D', 'E'];
 const PARALELOS = ['A', 'B', 'C', 'D', 'E'];
 
 const PERIODOS = ['Ciclo Sierra', 'Ciclo Costa'];
+const ETAPAS = ['Base', 'Pre Intensivo', 'Intensivo'];
 
 const MATERIAS_BASE = [
   'Matemáticas',
@@ -92,25 +91,25 @@ export default function CursosPage() {
 
   // Formulario de Datos Generales
   const [periodoLectivo, setPeriodoLectivo] = useState(PERIODOS[0]);
+  const [etapa, setEtapa] = useState(ETAPAS[0]);
   const [sede, setSede] = useState(SEDES[0]);
   const [aulaFisica, setAulaFisica] = useState('');
   const [estado, setEstado] = useState('Activo');
 
-  // Campos específicos de Código para Sierra
+  // Campos específicos para Sierra
   const [apertura, setApertura] = useState(APERTURAS_SIERRA[0]);
   const [numeroCurso, setNumeroCurso] = useState(NUMEROS_CURSO[0]);
 
-  // Campos específicos de Código para Costa
+  // Campos específicos para Costa
   const [universidad, setUniversidad] = useState(UNIVERSIDADES[0]);
   const [grupo, setGrupo] = useState('Ninguno');
   const [paralelo, setParalelo] = useState(PARALELOS[0]);
 
-  // Formulario Malla Curricular y Horarios
+  // Malla y Horarios
   const [malla, setMalla] = useState<Record<string, number>>({});
   const [talleres, setTalleres] = useState<Taller[]>([]);
   const [horarios, setHorarios] = useState<BloqueHorario[]>([]);
 
-  // Generación dinámica del código según el ciclo (omite grupo si es 'Ninguno')
   const codigoCosta =
     grupo && grupo !== 'Ninguno'
       ? `${MAPEO_SEDES[sede] || 'AMB'}-${universidad}-${grupo}-${paralelo}`
@@ -136,6 +135,7 @@ export default function CursosPage() {
   const limpiarFormulario = () => {
     setCursoEditandoId(null);
     setPeriodoLectivo(PERIODOS[0]);
+    setEtapa(ETAPAS[0]);
     setSede(SEDES[0]);
     setApertura(APERTURAS_SIERRA[0]);
     setNumeroCurso(NUMEROS_CURSO[0]);
@@ -156,11 +156,7 @@ export default function CursosPage() {
     }));
   };
 
-  // Talleres Handlers
-  const agregarTaller = () => {
-    setTalleres((prev) => [...prev, { nombre: '', clases: 1 }]);
-  };
-
+  const agregarTaller = () => setTalleres((prev) => [...prev, { nombre: '', clases: 1 }]);
   const actualizarTaller = (index: number, campo: keyof Taller, valor: any) => {
     setTalleres((prev) => {
       const copy = [...prev];
@@ -168,12 +164,8 @@ export default function CursosPage() {
       return copy;
     });
   };
+  const eliminarTaller = (index: number) => setTalleres((prev) => prev.filter((_, i) => i !== index));
 
-  const eliminarTaller = (index: number) => {
-    setTalleres((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  // Horario Handlers
   const agregarBloqueHorario = () => {
     const nuevo: BloqueHorario = {
       id: Date.now().toString(),
@@ -187,17 +179,11 @@ export default function CursosPage() {
   };
 
   const duplicarBloqueHorario = (bloque: BloqueHorario) => {
-    const duplicado: BloqueHorario = {
-      ...bloque,
-      id: Date.now().toString(),
-    };
-    setHorarios((prev) => [...prev, duplicado]);
+    setHorarios((prev) => [...prev, { ...bloque, id: Date.now().toString() }]);
   };
 
   const actualizarBloqueHorario = (id: string, campo: keyof BloqueHorario, valor: string) => {
-    setHorarios((prev) =>
-      prev.map((b) => (b.id === id ? { ...b, [campo]: valor } : b))
-    );
+    setHorarios((prev) => prev.map((b) => (b.id === id ? { ...b, [campo]: valor } : b)));
   };
 
   const eliminarBloqueHorario = (id: string) => {
@@ -208,6 +194,7 @@ export default function CursosPage() {
     setCursoEditandoId(c.id);
     const pLectivo = c.periodo_lectivo || PERIODOS[0];
     setPeriodoLectivo(pLectivo);
+    setEtapa(c.etapa || ETAPAS[0]);
     setSede(c.sede || SEDES[0]);
     setApertura(c.apertura || APERTURAS_SIERRA[0]);
     setNumeroCurso(c.numero_curso || NUMEROS_CURSO[0]);
@@ -249,6 +236,7 @@ export default function CursosPage() {
       paralelo,
       aula_fisica: aulaFisica,
       periodo_lectivo: periodoLectivo,
+      etapa,
       estado,
       malla_json: malla,
       talleres_json: talleres,
@@ -257,7 +245,6 @@ export default function CursosPage() {
 
     if (cursoEditandoId) {
       const { error } = await supabase.from('cursos').update(cursoData).eq('id', cursoEditandoId);
-
       if (error) alert('Error actualizando curso: ' + error.message);
       else {
         alert('Curso actualizado con éxito.');
@@ -266,7 +253,6 @@ export default function CursosPage() {
       }
     } else {
       const { error } = await supabase.from('cursos').insert([cursoData]);
-
       if (error) alert('Error creando curso: ' + error.message);
       else {
         alert('Curso guardado con éxito.');
@@ -290,14 +276,14 @@ export default function CursosPage() {
             {cursoEditandoId ? '✏️ Editar Curso' : 'Crear Nuevo Curso'}
           </h2>
           {cursoEditandoId && (
-            <button type="button" onClick={limpiarFormulario} className="text-xs text-slate-400 hover:text-white underline">
+            <button type="button" onClick={limpiarFormulario} className="text-xs text-slate-400 hover:text-white underline cursor-pointer">
               Cancelar
             </button>
           )}
         </div>
 
-        {/* Selección del Período Lectivo y Aula */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-800/40 p-4 rounded-xl border border-slate-700">
+        {/* Selección del Período Lectivo, Etapa y Aula */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-800/40 p-4 rounded-xl border border-slate-700">
           <div>
             <label className="block text-xs font-semibold text-orange-400 mb-1">Período Lectivo / Ciclo *</label>
             <select
@@ -307,6 +293,19 @@ export default function CursosPage() {
             >
               {PERIODOS.map((p) => (
                 <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-blue-400 mb-1">Etapa del Curso *</label>
+            <select
+              value={etapa}
+              onChange={(e) => setEtapa(e.target.value)}
+              className="w-full p-2.5 rounded-lg bg-slate-900 border border-blue-500/50 text-white font-semibold focus:outline-none focus:border-blue-500"
+            >
+              {ETAPAS.map((e) => (
+                <option key={e} value={e}>{e}</option>
               ))}
             </select>
           </div>
@@ -334,7 +333,7 @@ export default function CursosPage() {
             </div>
           </div>
 
-          {/* Formulario Código Ciclo Sierra */}
+          {/* Formulario Sierra */}
           {periodoLectivo === 'Ciclo Sierra' ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div>
@@ -387,7 +386,7 @@ export default function CursosPage() {
               </div>
             </div>
           ) : (
-            /* Formulario Código Ciclo Costa */
+            /* Formulario Costa */
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-xs text-slate-300 font-semibold mb-1">1. Sede</label>
@@ -446,7 +445,7 @@ export default function CursosPage() {
           )}
         </div>
 
-        {/* Configuración de la Malla Curricular */}
+        {/* Configuración Malla Curricular */}
         <div className="border-t border-slate-700 pt-4 space-y-3">
           <h3 className="font-semibold text-slate-200 text-sm">
             📚 Malla Curricular (Clases semanales requeridas por materia)
@@ -515,7 +514,7 @@ export default function CursosPage() {
           )}
         </div>
 
-        {/* Programación de Horario de Clases */}
+        {/* Programación Horario de Clases */}
         <div className="border-t border-slate-700 pt-4 space-y-3">
           <div className="flex justify-between items-center">
             <h3 className="font-semibold text-slate-200 text-sm">
@@ -618,7 +617,7 @@ export default function CursosPage() {
         </div>
       </form>
 
-      {/* Lista de Cursos */}
+      {/* Lista de Cursos Registrados */}
       <div className="space-y-4">
         <h2 className="text-2xl font-semibold text-slate-800">Cursos Registrados</h2>
         {loading ? (
@@ -631,6 +630,7 @@ export default function CursosPage() {
               <thead className="bg-slate-100 text-slate-700 text-sm">
                 <tr>
                   <th className="p-3.5 border-b">Código del Curso</th>
+                  <th className="p-3.5 border-b">Etapa</th>
                   <th className="p-3.5 border-b">Sede</th>
                   <th className="p-3.5 border-b">Aula</th>
                   <th className="p-3.5 border-b">Período / Ciclo</th>
@@ -652,6 +652,11 @@ export default function CursosPage() {
                       <td className="p-3.5">
                         <span className="bg-blue-50 text-[#0052B4] border border-blue-200 font-mono font-extrabold text-sm px-3 py-1 rounded-md">
                           {codStr}
+                        </span>
+                      </td>
+                      <td className="p-3.5">
+                        <span className="bg-slate-100 text-slate-800 border border-slate-300 text-xs font-semibold px-2 py-0.5 rounded">
+                          {c.etapa || 'Base'}
                         </span>
                       </td>
                       <td className="p-3.5 text-slate-700 font-medium">{c.sede}</td>
