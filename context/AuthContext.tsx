@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { User } from '@supabase/supabase-js';
+import { useRouter, usePathname } from 'next/navigation';
 
 type Rol = 'Administrador de página' | 'Lider Académico Nacional' | 'Lider Académico' | 'Profesor' | null;
 
@@ -34,6 +35,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const pathname = usePathname();
 
   const cargarPerfil = async (userId: string) => {
     const { data } = await supabase.from('perfiles').select('*').eq('id', userId).single();
@@ -44,8 +47,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const getSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       setUser(session?.user || null);
+
       if (session?.user) {
         await cargarPerfil(session.user.id);
+        if (pathname === '/login') {
+          router.push('/');
+        }
+      } else {
+        if (pathname !== '/login') {
+          router.push('/login');
+        }
       }
       setLoading(false);
     };
@@ -54,10 +65,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user || null);
+
       if (session?.user) {
         await cargarPerfil(session.user.id);
+        if (pathname === '/login') {
+          router.push('/');
+        }
       } else {
         setPerfil(null);
+        if (pathname !== '/login') {
+          router.push('/login');
+        }
       }
       setLoading(false);
     });
@@ -65,16 +83,27 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => {
       authListener.subscription.unsubscribe();
     };
-  }, []);
+  }, [pathname, router]);
 
   const logout = async () => {
     await supabase.auth.signOut();
+    setPerfil(null);
+    setUser(null);
+    router.push('/login');
   };
 
   const tienePermiso = (rolesPermitidos: Rol[]) => {
     if (!perfil || !perfil.rol) return false;
     return rolesPermitidos.includes(perfil.rol);
   };
+
+  if (loading && pathname !== '/login') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white text-sm">
+        Verificando sesión...
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider value={{ user, perfil, loading, logout, tienePermiso }}>

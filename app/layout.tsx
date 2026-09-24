@@ -1,10 +1,15 @@
 'use client';
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { usePathname } from 'next/navigation';
 import './globals.css';
 
 function NavigationBar() {
   const { perfil, logout, tienePermiso } = useAuth();
+  const pathname = usePathname();
+
+  // No mostrar la barra de navegación en la pantalla de login
+  if (pathname === '/login') return null;
 
   return (
     <nav className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-50 shadow-md">
@@ -73,7 +78,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="antialiased bg-slate-50 min-h-screen text-slate-900">
         <AuthProvider>
           <NavigationBar />
-          <div className="py-6">{children}</div>
+          <div>{children}</div>
         </AuthProvider>
       </body>
     </html>
