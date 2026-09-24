@@ -13,6 +13,7 @@ interface Profesor {
   horas_max_semanales: number;
   tarifa_hora_clase: number;
   tarifa_hora_admin: number;
+  color_hex?: string;
   disponibilidad_json?: Record<string, string[]>;
   profesor_materia?: { materias: { nombre: string } }[];
 }
@@ -40,6 +41,7 @@ const SEDES = [
   'Tena',
 ];
 
+// Se agrega "OV" al listado oficial de materias
 const MATERIAS_DISPONIBLES = [
   'Matemáticas',
   'Química',
@@ -50,6 +52,20 @@ const MATERIAS_DISPONIBLES = [
   'Razonamiento Numérico',
   'Razonamiento Verbal',
   'Razonamiento Lógico',
+  'OV',
+];
+
+const PALETA_COLORES = [
+  { nombre: 'Azul', hex: '#2563eb' },
+  { nombre: 'Verde Esmeralda', hex: '#059669' },
+  { nombre: 'Naranja Brand', hex: '#ff6b35' },
+  { nombre: 'Púrpura', hex: '#7c3aed' },
+  { nombre: 'Rosa', hex: '#db2777' },
+  { nombre: 'Rojo', hex: '#dc2626' },
+  { nombre: 'Cian', hex: '#0891b2' },
+  { nombre: 'Ámbar', hex: '#d97706' },
+  { nombre: 'Índigo', hex: '#4f46e5' },
+  { nombre: 'Gris Oscuro', hex: '#475569' },
 ];
 
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
@@ -82,6 +98,7 @@ export default function Home() {
   const [tipoContrato, setTipoContrato] = useState('Tiempo completo (40h)');
   const [tarifaClase, setTarifaClase] = useState<number | ''>('');
   const [tarifaAdmin, setTarifaAdmin] = useState<number | ''>('');
+  const [colorHex, setColorHex] = useState(PALETA_COLORES[0].hex);
   const [materiasSeleccionadas, setMateriasSeleccionadas] = useState<string[]>([]);
 
   // Estado para la Matriz de Disponibilidad
@@ -197,6 +214,7 @@ export default function Home() {
           horas_max_semanales: horasMax,
           tarifa_hora_clase: tarifaClaseVal,
           tarifa_hora_admin: tarifaAdminVal,
+          color_hex: colorHex,
           disponibilidad_json: disponibilidad,
         },
       ])
@@ -228,6 +246,7 @@ export default function Home() {
       setTipoContrato('Tiempo completo (40h)');
       setTarifaClase('');
       setTarifaAdmin('');
+      setColorHex(PALETA_COLORES[0].hex);
       setMateriasSeleccionadas([]);
       setDisponibilidad({});
       inicializarDatos();
@@ -276,6 +295,36 @@ export default function Home() {
               required
               className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500"
             />
+          </div>
+        </div>
+
+        {/* Color Representativo del Docente */}
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-2">
+            🎨 Color Identificador para el Horario:
+          </label>
+          <div className="flex flex-wrap items-center gap-3 bg-slate-800/50 p-3.5 rounded-lg border border-slate-700">
+            {PALETA_COLORES.map((c) => (
+              <button
+                key={c.hex}
+                type="button"
+                onClick={() => setColorHex(c.hex)}
+                className={`w-8 h-8 rounded-full border-2 transition-transform cursor-pointer ${
+                  colorHex === c.hex ? 'scale-110 border-white ring-2 ring-blue-400' : 'border-transparent hover:scale-105'
+                }`}
+                style={{ backgroundColor: c.hex }}
+                title={c.nombre}
+              />
+            ))}
+            <div className="flex items-center space-x-2 ml-auto">
+              <span className="text-xs text-slate-400">Personalizado:</span>
+              <input
+                type="color"
+                value={colorHex}
+                onChange={(e) => setColorHex(e.target.value)}
+                className="w-8 h-8 rounded border-none bg-transparent cursor-pointer"
+              />
+            </div>
           </div>
         </div>
 
@@ -366,13 +415,13 @@ export default function Home() {
                   onChange={() => handleCheckboxChange(materia)}
                   className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 bg-slate-700 border-slate-600"
                 />
-                <span>{materia}</span>
+                <span className={materia === 'OV' ? 'font-bold text-orange-400' : ''}>{materia}</span>
               </label>
             ))}
           </div>
         </div>
 
-        {/* Matriz de Disponibilidad Horaria con Selección de Día Completo */}
+        {/* Matriz de Disponibilidad Horaria */}
         <div className="space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <label className="block text-sm font-medium text-slate-300">
@@ -442,7 +491,7 @@ export default function Home() {
 
         <button
           type="submit"
-          className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-medium transition-colors text-base shadow-md"
+          className="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-medium transition-colors text-base shadow-md cursor-pointer"
         >
           Guardar Profesor
         </button>
@@ -461,6 +510,7 @@ export default function Home() {
               <thead className="bg-slate-100 text-slate-700 text-sm">
                 <tr>
                   <th className="p-3.5 border-b">Docente</th>
+                  <th className="p-3.5 border-b">Color</th>
                   <th className="p-3.5 border-b">Sedes</th>
                   <th className="p-3.5 border-b">Contrato</th>
                   <th className="p-3.5 border-b">Tarifas (Clase / Admin)</th>
@@ -473,6 +523,13 @@ export default function Home() {
                     <td className="p-3.5 font-medium text-slate-900">
                       <div>{prof.nombre} {prof.apellido}</div>
                       <div className="text-xs text-slate-500">{prof.email}</div>
+                    </td>
+                    <td className="p-3.5">
+                      <div
+                        className="w-6 h-6 rounded-full border border-slate-300 shadow-sm"
+                        style={{ backgroundColor: prof.color_hex || '#2563eb' }}
+                        title={`Color: ${prof.color_hex || '#2563eb'}`}
+                      />
                     </td>
                     <td className="p-3.5 text-slate-700 font-medium">
                       {prof.sede || 'Ambato'}
@@ -498,7 +555,11 @@ export default function Home() {
                           prof.profesor_materia.map((pm, idx) => (
                             <span
                               key={idx}
-                              className="bg-slate-100 text-slate-700 text-xs px-2 py-0.5 rounded border border-slate-200"
+                              className={`text-xs px-2 py-0.5 rounded border ${
+                                pm.materias?.nombre === 'OV'
+                                  ? 'bg-orange-100 text-orange-800 border-orange-300 font-bold'
+                                  : 'bg-slate-100 text-slate-700 border-slate-200'
+                              }`}
                             >
                               {pm.materias?.nombre}
                             </span>
