@@ -2,6 +2,7 @@
 
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { usePathname } from 'next/navigation';
+import Image from 'next/image';
 import './globals.css';
 
 function NavigationBar() {
@@ -40,19 +41,21 @@ function NavigationBar() {
 
       {/* Barra de Navegación Principal Quality UP */}
       <nav className="max-w-7xl mx-auto px-6 py-3 flex flex-col md:flex-row items-center justify-between gap-4">
-        {/* Branding Quality UP */}
-        <a href="/" className="flex items-center space-x-2 group">
-          <div className="flex items-center font-extrabold text-2xl tracking-tight text-[#0052B4]">
-            Quality<span className="text-[#FF6B35]">UP</span>
-          </div>
-          <span className="text-[9px] uppercase tracking-wider font-bold text-slate-400 border-l border-slate-300 pl-2 hidden sm:inline-block">
-            Soluciones<br />Educativas
-          </span>
+        {/* Branding / Logotipo con Imagen */}
+        <a href="/" className="flex items-center space-x-3 group">
+          <Image
+            src="/logo-qualityup.png"
+            alt="Logo Quality UP"
+            width={160}
+            height={50}
+            className="h-10 w-auto object-contain"
+            priority
+          />
         </a>
 
         {/* Enlaces de Navegación */}
         <div className="flex flex-wrap justify-center items-center gap-1 sm:gap-2 text-xs font-semibold text-slate-700">
-          {/* Docentes: Admins, Líder Nac, Líder Académico */}
+          {/* Docentes */}
           {tienePermiso(['Administrador de página', 'Lider Académico Nacional', 'Lider Académico']) && (
             <a
               href="/"
@@ -64,7 +67,7 @@ function NavigationBar() {
             </a>
           )}
 
-          {/* Cursos: Admins, Líder Nac, Líder Académico */}
+          {/* Cursos / Paralelos */}
           {tienePermiso(['Administrador de página', 'Lider Académico Nacional', 'Lider Académico']) && (
             <a
               href="/cursos"
@@ -76,7 +79,19 @@ function NavigationBar() {
             </a>
           )}
 
-          {/* Feriados: Admins, Líder Nac */}
+          {/* Temarios */}
+          {tienePermiso(['Administrador de página', 'Lider Académico Nacional', 'Lider Académico']) && (
+            <a
+              href="/temarios"
+              className={`px-3 py-2 rounded-lg transition-colors ${
+                pathname === '/temarios' ? 'bg-blue-50 text-[#0052B4] font-bold' : 'hover:bg-slate-100 hover:text-[#0052B4]'
+              }`}
+            >
+              Temarios
+            </a>
+          )}
+
+          {/* Calendario / Feriados */}
           {tienePermiso(['Administrador de página', 'Lider Académico Nacional']) && (
             <a
               href="/feriados"
@@ -88,7 +103,7 @@ function NavigationBar() {
             </a>
           )}
 
-          {/* Asignación Automática: Admins, Líder Nac, Líder Académico */}
+          {/* Asignación */}
           {tienePermiso(['Administrador de página', 'Lider Académico Nacional', 'Lider Académico']) && (
             <a
               href="/asignacion"
@@ -110,7 +125,7 @@ function NavigationBar() {
             Actividades Extras
           </a>
 
-          {/* Horario Consolidado */}
+          {/* Horarios */}
           <a
             href="/horario-consolidado"
             className="bg-[#0052B4] hover:bg-[#004098] text-white px-3.5 py-2 rounded-lg font-bold shadow-sm transition-colors flex items-center gap-1.5"
@@ -118,7 +133,7 @@ function NavigationBar() {
             📊 Horarios
           </a>
 
-          {/* Panel de Roles: Solo Administrador de Página */}
+          {/* Panel de Roles */}
           {tienePermiso(['Administrador de página']) && (
             <a
               href="/admin/roles"
