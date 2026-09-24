@@ -15,7 +15,7 @@ interface Profesor {
   cedula: string;
   email: string;
   telefono: string;
-  sede: string; // Guarda las sedes separadas por comas (ej. "Ambato, Latacunga")
+  sede: string;
   tipo_contrato: string;
   tarifa_hora_clase: number;
   tarifa_hora_admin: number;
@@ -140,7 +140,6 @@ export default function DocentesPage() {
     setEmail(p.email || '');
     setTelefono(p.telefono || '');
     
-    // Convertir string de sedes a array
     const arraySedes = p.sede ? p.sede.split(',').map((s) => s.trim()) : [];
     setSedesSeleccionadas(arraySedes);
 
@@ -206,7 +205,6 @@ export default function DocentesPage() {
       profId = data[0].id;
     }
 
-    // Actualizar relación profesor_materia
     await supabase.from('profesor_materia').delete().eq('profesor_id', profId);
 
     if (materiasSeleccionadas.length > 0) {
@@ -464,62 +462,67 @@ export default function DocentesPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
-                {profesores.map((p) => (
-                  <tr key={p.id} className="hover:bg-slate-50">
-                    <td className="p-3.5 font-bold text-slate-900">
-                      {p.nombre} {p.apellido}
-                      {p.cedula && <span className="block text-xs font-normal text-slate-500 font-mono">{p.cedula}</span>}
-                    </td>
-                    <td className="p-3.5">
-                      <div className="flex flex-wrap gap-1">
-                        {p.sede ? (
-                          p.sede.split(',').map((s) => (
-                            <span key={s} className="bg-blue-50 text-blue-800 text-[11px] font-medium px-2 py-0.5 rounded border border-blue-200">
-                              {s.trim()}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-slate-400 text-xs italic">Sin sede</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-3.5 text-slate-700">{p.tipo_contrato}</td>
-                    <td className="p-3.5 font-mono text-xs">
-                      ${p.tarifa_hora_clase \vert{}\vert{} 0} /${p.tarifa_hora_admin || 0}
-                    </td>
-                    <td className="p-3.5">
-                      <div className="flex flex-wrap gap-1">
-                        {p.profesor_materia && p.profesor_materia.length > 0 ? (
-                          p.profesor_materia.map((pm) => (
-                            <span key={pm.materia_id} className="bg-emerald-50 text-emerald-800 text-[10px] font-semibold px-2 py-0.5 rounded border border-emerald-200">
-                              {pm.materias?.nombre}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-slate-400 text-xs italic">Ninguna</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-3.5 text-center">
-                      <div className="flex items-center justify-center space-x-2">
-                        <button
-                          type="button"
-                          onClick={() => handleEditar(p)}
-                          className="bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 text-xs px-2.5 py-1 rounded font-medium"
-                        >
-                          ✏️ Editar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleEliminar(p.id, `${p.nombre} ${p.apellido}`)}
-                          className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 text-xs px-2.5 py-1 rounded font-medium"
-                        >
-                          🗑️ Eliminar
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {profesores.map((p) => {
+                  const tClase = p.tarifa_hora_clase ? p.tarifa_hora_clase : 0;
+                  const tAdmin = p.tarifa_hora_admin ? p.tarifa_hora_admin : 0;
+
+                  return (
+                    <tr key={p.id} className="hover:bg-slate-50">
+                      <td className="p-3.5 font-bold text-slate-900">
+                        {p.nombre} {p.apellido}
+                        {p.cedula && <span className="block text-xs font-normal text-slate-500 font-mono">{p.cedula}</span>}
+                      </td>
+                      <td className="p-3.5">
+                        <div className="flex flex-wrap gap-1">
+                          {p.sede ? (
+                            p.sede.split(',').map((s) => (
+                              <span key={s} className="bg-blue-50 text-blue-800 text-[11px] font-medium px-2 py-0.5 rounded border border-blue-200">
+                                {s.trim()}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-slate-400 text-xs italic">Sin sede</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3.5 text-slate-700">{p.tipo_contrato}</td>
+                      <td className="p-3.5 font-mono text-xs">
+                        ${tClase} /${tAdmin}
+                      </td>
+                      <td className="p-3.5">
+                        <div className="flex flex-wrap gap-1">
+                          {p.profesor_materia && p.profesor_materia.length > 0 ? (
+                            p.profesor_materia.map((pm) => (
+                              <span key={pm.materia_id} className="bg-emerald-50 text-emerald-800 text-[10px] font-semibold px-2 py-0.5 rounded border border-emerald-200">
+                                {pm.materias?.nombre}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-slate-400 text-xs italic">Ninguna</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3.5 text-center">
+                        <div className="flex items-center justify-center space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEditar(p)}
+                            className="bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 text-xs px-2.5 py-1 rounded font-medium"
+                          >
+                            ✏️ Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEliminar(p.id, `${p.nombre} ${p.apellido}`)}
+                            className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 text-xs px-2.5 py-1 rounded font-medium"
+                          >
+                            🗑️ Eliminar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
