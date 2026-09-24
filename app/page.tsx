@@ -350,7 +350,7 @@ export default function DocentesPage() {
                   <input
                     type="checkbox"
                     checked={checked}
-                    onChange={() => {}} // Manejado por onClick del label
+                    onChange={() => {}}
                     className="rounded text-blue-500 focus:ring-0"
                   />
                   <span>{s}</span>
