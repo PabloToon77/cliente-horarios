@@ -30,6 +30,14 @@ const SEDES = [
   'Loja',
   'Latacunga',
   'Puyo',
+  'Salcedo',
+  'Pujilí',
+  'Píllaro',
+  'Baños',
+  'Coca',
+  'Alausí',
+  'Bucay',
+  'Tena',
 ];
 
 const MATERIAS_DISPONIBLES = [
@@ -70,7 +78,7 @@ export default function Home() {
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
   const [email, setEmail] = useState('');
-  const [sede, setSede] = useState('Ambato');
+  const [sedesSeleccionadas, setSedesSeleccionadas] = useState<string[]>(['Ambato']);
   const [tipoContrato, setTipoContrato] = useState('Tiempo completo (40h)');
   const [tarifaClase, setTarifaClase] = useState<number | ''>('');
   const [tarifaAdmin, setTarifaAdmin] = useState<number | ''>('');
@@ -111,6 +119,14 @@ export default function Home() {
     inicializarDatos();
   }, []);
 
+  const handleSedeChange = (sedeNombre: string) => {
+    if (sedesSeleccionadas.includes(sedeNombre)) {
+      setSedesSeleccionadas(sedesSeleccionadas.filter((s) => s !== sedeNombre));
+    } else {
+      setSedesSeleccionadas([...sedesSeleccionadas, sedeNombre]);
+    }
+  };
+
   const handleCheckboxChange = (materiaNombre: string) => {
     if (materiasSeleccionadas.includes(materiaNombre)) {
       setMateriasSeleccionadas(materiasSeleccionadas.filter((m) => m !== materiaNombre));
@@ -150,6 +166,11 @@ export default function Home() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (sedesSeleccionadas.length === 0) {
+      alert('Por favor selecciona al menos una sede para el profesor.');
+      return;
+    }
+
     if (materiasSeleccionadas.length === 0) {
       alert('Por favor selecciona al menos una materia que el profesor pueda impartir.');
       return;
@@ -162,6 +183,8 @@ export default function Home() {
     const tarifaClaseVal = tipoContrato === 'Por horas' ? Number(tarifaClase) || 0 : 0;
     const tarifaAdminVal = tipoContrato === 'Por horas' ? Number(tarifaAdmin) || 0 : 0;
 
+    const sedesString = sedesSeleccionadas.join(', ');
+
     const { data: nuevoProf, error: errorProf } = await supabase
       .from('profesores')
       .insert([
@@ -169,7 +192,7 @@ export default function Home() {
           nombre,
           apellido,
           email,
-          sede,
+          sede: sedesString,
           tipo_contrato: tipoContrato,
           horas_max_semanales: horasMax,
           tarifa_hora_clase: tarifaClaseVal,
@@ -201,7 +224,7 @@ export default function Home() {
       setNombre('');
       setApellido('');
       setEmail('');
-      setSede('Ambato');
+      setSedesSeleccionadas(['Ambato']);
       setTipoContrato('Tiempo completo (40h)');
       setTarifaClase('');
       setTarifaAdmin('');
@@ -219,8 +242,8 @@ export default function Home() {
       <form onSubmit={handleSubmit} className="bg-slate-900 p-6 rounded-xl space-y-6 text-white shadow-lg">
         <h2 className="text-xl font-semibold border-b border-slate-700 pb-2">Registrar Nuevo Profesor</h2>
 
-        {/* Datos Personales y Sede */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Datos Personales */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs text-slate-400 mb-1">Nombre</label>
             <input
@@ -254,19 +277,25 @@ export default function Home() {
               className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500"
             />
           </div>
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">Sede Principal</label>
-            <select
-              value={sede}
-              onChange={(e) => setSede(e.target.value)}
-              className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500"
-            >
-              {SEDES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
+        </div>
+
+        {/* Selección Múltiple de Sedes */}
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-3">
+            Sedes Habilitadas para Laborar:
+          </label>
+          <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-3 bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+            {SEDES.map((s) => (
+              <label key={s} className="flex items-center space-x-2 text-sm cursor-pointer hover:text-blue-400">
+                <input
+                  type="checkbox"
+                  checked={sedesSeleccionadas.includes(s)}
+                  onChange={() => handleSedeChange(s)}
+                  className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 bg-slate-700 border-slate-600"
+                />
+                <span>{s}</span>
+              </label>
+            ))}
           </div>
         </div>
 
@@ -432,7 +461,7 @@ export default function Home() {
               <thead className="bg-slate-100 text-slate-700 text-sm">
                 <tr>
                   <th className="p-3.5 border-b">Docente</th>
-                  <th className="p-3.5 border-b">Sede</th>
+                  <th className="p-3.5 border-b">Sedes</th>
                   <th className="p-3.5 border-b">Contrato</th>
                   <th className="p-3.5 border-b">Tarifas (Clase / Admin)</th>
                   <th className="p-3.5 border-b">Materias Habilitadas</th>
@@ -445,7 +474,9 @@ export default function Home() {
                       <div>{prof.nombre} {prof.apellido}</div>
                       <div className="text-xs text-slate-500">{prof.email}</div>
                     </td>
-                    <td className="p-3.5 text-slate-700 font-medium">{prof.sede || 'Ambato'}</td>
+                    <td className="p-3.5 text-slate-700 font-medium">
+                      {prof.sede || 'Ambato'}
+                    </td>
                     <td className="p-3.5">
                       <span className="bg-slate-100 text-slate-800 text-xs px-2.5 py-1 rounded-full font-medium border border-slate-200">
                         {prof.tipo_contrato || 'Tiempo completo'}
