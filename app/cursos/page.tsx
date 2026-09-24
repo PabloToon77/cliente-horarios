@@ -35,7 +35,7 @@ interface Curso {
   horario_json?: BloqueHorario[];
 }
 
-// Mapeo de Sedes con sus respectivas 3 letras de código
+// Mapeo de Sedes con sus respectivas 3 letras de código (Se añade Online: ONL)
 const MAPEO_SEDES: Record<string, string> = {
   Ambato: 'AMB',
   Quito: 'QUI',
@@ -52,6 +52,7 @@ const MAPEO_SEDES: Record<string, string> = {
   Alausí: 'ALA',
   Bucay: 'BUC',
   Tena: 'TEN',
+  Online: 'ONL',
 };
 
 const SEDES = Object.keys(MAPEO_SEDES);
@@ -61,8 +62,8 @@ const APERTURAS_SIERRA = ['RS0', 'RS1', 'RS2', 'RS3', 'IS1', 'IS2', 'IS3', 'IS4'
 const NUMEROS_CURSO = ['01', '02', '03', '04', '05', '06', '07', '08', '09'];
 const ANIO_LECTIVO = '27';
 
-// Opciones Ciclo Costa (Se añade ONL)
-const UNIVERSIDADES = ['UTA', 'ESPE', 'UNACH', 'UTC', 'ESPOCH', 'UCE', 'EPN', 'UNL', 'UCUENCA', 'ONL'];
+// Opciones Ciclo Costa
+const UNIVERSIDADES = ['UTA', 'ESPE', 'UNACH', 'UTC', 'ESPOCH', 'UCE', 'EPN', 'UNL', 'UCUENCA'];
 const GRUPOS = ['Ninguno', 'A', 'B', 'C', 'D', 'E'];
 const PARALELOS = ['A', 'B', 'C', 'D', 'E'];
 
@@ -110,9 +111,10 @@ export default function CursosPage() {
   const [horarios, setHorarios] = useState<BloqueHorario[]>([]);
 
   // Generación dinámica del código según el ciclo (omite grupo si es 'Ninguno')
-  const codigoCosta = grupo && grupo !== 'Ninguno'
-    ? `${MAPEO_SEDES[sede] || 'AMB'}-${universidad}-${grupo}-${paralelo}`
-    : `${MAPEO_SEDES[sede] || 'AMB'}-${universidad}-${paralelo}`;
+  const codigoCosta =
+    grupo && grupo !== 'Ninguno'
+      ? `${MAPEO_SEDES[sede] || 'AMB'}-${universidad}-${grupo}-${paralelo}`
+      : `${MAPEO_SEDES[sede] || 'AMB'}-${universidad}-${paralelo}`;
 
   const codigoGenerado =
     periodoLectivo === 'Ciclo Sierra'
