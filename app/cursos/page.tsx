@@ -20,7 +20,6 @@ interface Taller {
 interface Curso {
   id: number;
   codigo?: string;
-  nombre: string;
   sede: string;
   apertura?: string;
   numero_curso?: string;
@@ -85,11 +84,10 @@ export default function CursosPage() {
   const [cursoEditandoId, setCursoEditandoId] = useState<number | null>(null);
 
   // Formulario de Datos Generales y Código del Curso
-  const [periodoLectivo, setPeriodoLectivo] = useState(PERIODOS[0]); // 'Ciclo Sierra' por defecto
+  const [periodoLectivo, setPeriodoLectivo] = useState(PERIODOS[0]);
   const [apertura, setApertura] = useState(APERTURAS_SIERRA[0]);
   const [sede, setSede] = useState(SEDES[0]);
   const [numeroCurso, setNumeroCurso] = useState(NUMEROS_CURSO[0]);
-  const [nombre, setNombre] = useState('');
   const [aulaFisica, setAulaFisica] = useState('');
   const [estado, setEstado] = useState('Activo');
 
@@ -105,7 +103,6 @@ export default function CursosPage() {
   // Determinar lista de aperturas dinámicamente
   const opcionesApertura = periodoLectivo === 'Ciclo Sierra' ? APERTURAS_SIERRA : APERTURAS_COSTA;
 
-  // Actualizar apertura por defecto si se cambia el ciclo
   const handlePeriodoChange = (nuevoPeriodo: string) => {
     setPeriodoLectivo(nuevoPeriodo);
     if (nuevoPeriodo === 'Ciclo Sierra') {
@@ -120,7 +117,7 @@ export default function CursosPage() {
 
   const cargarCursos = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('cursos').select('*').order('nombre');
+    const { data, error } = await supabase.from('cursos').select('*').order('created_at', { ascending: false });
     if (error) console.error('Error cargando cursos:', error);
     else setCursos(data || []);
     setLoading(false);
@@ -136,7 +133,6 @@ export default function CursosPage() {
     setApertura(APERTURAS_SIERRA[0]);
     setSede(SEDES[0]);
     setNumeroCurso(NUMEROS_CURSO[0]);
-    setNombre('');
     setAulaFisica('');
     setEstado('Activo');
     setMalla({});
@@ -206,7 +202,6 @@ export default function CursosPage() {
     setApertura(c.apertura || (pLectivo === 'Ciclo Sierra' ? APERTURAS_SIERRA[0] : APERTURAS_COSTA[0]));
     setSede(c.sede || SEDES[0]);
     setNumeroCurso(c.numero_curso || NUMEROS_CURSO[0]);
-    setNombre(c.nombre);
     setAulaFisica(c.aula_fisica || '');
     setEstado(c.estado || 'Activo');
     setMalla(c.malla_json || {});
@@ -216,8 +211,8 @@ export default function CursosPage() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleEliminar = async (id: number, nombreCurso: string) => {
-    if (!confirm(`¿Eliminar el curso/paralelo "${nombreCurso}"?`)) return;
+  const handleEliminar = async (id: number, codigoCurso: string) => {
+    if (!confirm(`¿Eliminar el curso "${codigoCurso}"?`)) return;
 
     const { error } = await supabase.from('cursos').delete().eq('id', id);
     if (error) alert('Error eliminando curso: ' + error.message);
@@ -232,11 +227,11 @@ export default function CursosPage() {
 
     const cursoData = {
       codigo: codigoGenerado,
+      nombre: codigoGenerado, // Se almacena el codigo como identificador
       apertura,
       sede,
       numero_curso: numeroCurso,
       anio_lectivo: ANIO_LECTIVO,
-      nombre,
       aula_fisica: aulaFisica,
       periodo_lectivo: periodoLectivo,
       estado,
@@ -277,7 +272,7 @@ export default function CursosPage() {
       <form onSubmit={handleSubmit} className="bg-slate-900 p-6 rounded-xl space-y-6 text-white shadow-lg">
         <div className="flex justify-between items-center border-b border-slate-700 pb-2">
           <h2 className="text-xl font-semibold">
-            {cursoEditandoId ? '✏️ Editar Curso / Paralelo' : 'Crear Nuevo Curso / Paralelo'}
+            {cursoEditandoId ? '✏️ Editar Curso' : 'Crear Nuevo Curso'}
           </h2>
           {cursoEditandoId && (
             <button type="button" onClick={limpiarFormulario} className="text-xs text-slate-400 hover:text-white underline">
@@ -286,8 +281,8 @@ export default function CursosPage() {
           )}
         </div>
 
-        {/* Selección del Período Lectivo / Ciclo primero */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-800/40 p-4 rounded-xl border border-slate-700">
+        {/* Selección del Período Lectivo y Aula */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-800/40 p-4 rounded-xl border border-slate-700">
           <div>
             <label className="block text-xs font-semibold text-orange-400 mb-1">Período Lectivo / Ciclo *</label>
             <select
@@ -299,18 +294,6 @@ export default function CursosPage() {
                 <option key={p} value={p}>{p}</option>
               ))}
             </select>
-          </div>
-
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">Nombre Descriptivo del Curso</label>
-            <input
-              type="text"
-              placeholder="Ej. Intensivo Preuniversitario - Grupo A"
-              value={nombre}
-              onChange={(e) => setNombre(e.target.value)}
-              required
-              className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500"
-            />
           </div>
 
           <div>
@@ -564,18 +547,17 @@ export default function CursosPage() {
 
       {/* Lista de Cursos */}
       <div className="space-y-4">
-        <h2 className="text-2xl font-semibold text-slate-800">Cursos y Paralelos Registrados</h2>
+        <h2 className="text-2xl font-semibold text-slate-800">Cursos Registrados</h2>
         {loading ? (
           <p className="text-slate-500">Cargando cursos...</p>
         ) : cursos.length === 0 ? (
-          <p className="text-slate-500 italic">No hay cursos o paralelos registrados.</p>
+          <p className="text-slate-500 italic">No hay cursos registrados.</p>
         ) : (
           <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm bg-white">
             <table className="w-full text-left border-collapse">
               <thead className="bg-slate-100 text-slate-700 text-sm">
                 <tr>
-                  <th className="p-3.5 border-b">Código Único</th>
-                  <th className="p-3.5 border-b">Nombre del Curso</th>
+                  <th className="p-3.5 border-b">Código del Curso</th>
                   <th className="p-3.5 border-b">Sede</th>
                   <th className="p-3.5 border-b">Aula</th>
                   <th className="p-3.5 border-b">Período</th>
@@ -583,37 +565,40 @@ export default function CursosPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
-                {cursos.map((c) => (
-                  <tr key={c.id} className="hover:bg-slate-50">
-                    <td className="p-3.5">
-                      <span className="bg-blue-50 text-[#0052B4] border border-blue-200 font-mono font-extrabold text-xs px-2.5 py-1 rounded-md">
-                        {c.codigo || `${c.apertura || 'RS0'}-${MAPEO_SEDES[c.sede] || 'AMB'}-${c.numero_curso || '01'}-27`}
-                      </span>
-                    </td>
-                    <td className="p-3.5 font-bold text-slate-900">{c.nombre}</td>
-                    <td className="p-3.5 text-slate-700 font-medium">{c.sede}</td>
-                    <td className="p-3.5 text-slate-600">{c.aula_fisica || 'Sin aula'}</td>
-                    <td className="p-3.5 text-slate-600">{c.periodo_lectivo || 'N/A'}</td>
-                    <td className="p-3.5 text-center">
-                      <div className="flex items-center justify-center space-x-2">
-                        <button
-                          type="button"
-                          onClick={() => handleEditar(c)}
-                          className="bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 text-xs px-2.5 py-1 rounded font-medium cursor-pointer"
-                        >
-                          ✏️ Editar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleEliminar(c.id, c.nombre)}
-                          className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 text-xs px-2.5 py-1 rounded font-medium cursor-pointer"
-                        >
-                          🗑️ Eliminar
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {cursos.map((c) => {
+                  const codStr = c.codigo || `${c.apertura || 'RS0'}-${MAPEO_SEDES[c.sede] || 'AMB'}-${c.numero_curso || '01'}-27`;
+
+                  return (
+                    <tr key={c.id} className="hover:bg-slate-50">
+                      <td className="p-3.5">
+                        <span className="bg-blue-50 text-[#0052B4] border border-blue-200 font-mono font-extrabold text-sm px-3 py-1 rounded-md">
+                          {codStr}
+                        </span>
+                      </td>
+                      <td className="p-3.5 text-slate-700 font-medium">{c.sede}</td>
+                      <td className="p-3.5 text-slate-600">{c.aula_fisica || 'Sin aula'}</td>
+                      <td className="p-3.5 text-slate-600">{c.periodo_lectivo || 'N/A'}</td>
+                      <td className="p-3.5 text-center">
+                        <div className="flex items-center justify-center space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => handleEditar(c)}
+                            className="bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 text-xs px-2.5 py-1 rounded font-medium cursor-pointer"
+                          >
+                            ✏️ Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleEliminar(c.id, codStr)}
+                            className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 text-xs px-2.5 py-1 rounded font-medium cursor-pointer"
+                          >
+                            🗑️ Eliminar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
