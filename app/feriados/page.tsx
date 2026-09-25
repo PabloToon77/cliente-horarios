@@ -21,10 +21,9 @@ interface Feriado {
 }
 
 const APERTURAS_SIERRA = ['RS0', 'RS1', 'RS2', 'RS3', 'IS1', 'IS2', 'IS3', 'IS4'];
-const APERTURAS_COSTA = ['RC0', 'RC1', 'RC2', 'RC3', 'IC1', 'IC2', 'IC3', 'IC4'];
 
 export default function CalendarioFeriadosPage() {
-  // Estados para Fechas de Apertura
+  // Estados para Fechas de Apertura / Ciclo
   const [fechasApertura, setFechasApertura] = useState<FechaApertura[]>([]);
   const [cicloSeleccionado, setCicloSeleccionado] = useState('Ciclo Sierra');
   const [apertura, setApertura] = useState(APERTURAS_SIERRA[0]);
@@ -40,15 +39,21 @@ export default function CalendarioFeriadosPage() {
   const [fechaFinFeriado, setFechaFinFeriado] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const aperturasActuales = cicloSeleccionado === 'Ciclo Sierra' ? APERTURAS_SIERRA : APERTURAS_COSTA;
-
   const cargarDatos = async () => {
     setLoading(true);
 
-    // Cargar Fechas de Apertura
+    // Cargar Fechas de Apertura / Ciclo
     const { data: dataFechas, error: errorFechas } = await supabase.from('fechas_apertura').select('*');
-    if (errorFechas) console.error('Error cargando fechas de apertura:', errorFechas);
-    else setFechasApertura(dataFechas || []);
+    if (errorFechas) console.error('Error cargando fechas:', errorFechas);
+    else {
+      setFechasApertura(dataFechas || []);
+      // Si el ciclo seleccionado es Costa, intentar precargar su fecha global
+      const costaGlobal = (dataFechas || []).find((f) => f.periodo_lectivo === 'Ciclo Costa' && f.apertura === 'GLOBAL');
+      if (costaGlobal && cicloSeleccionado === 'Ciclo Costa') {
+        setFechaInicioApertura(costaGlobal.fecha_inicio || '');
+        setFechaFinApertura(costaGlobal.fecha_fin || '');
+      }
+    }
 
     // Cargar Feriados
     const { data: dataFeriados, error: errorFeriados } = await supabase
@@ -67,10 +72,20 @@ export default function CalendarioFeriadosPage() {
 
   const handleCicloChange = (nuevoCiclo: string) => {
     setCicloSeleccionado(nuevoCiclo);
-    setApertura(nuevoCiclo === 'Ciclo Sierra' ? APERTURAS_SIERRA[0] : APERTURAS_COSTA[0]);
+    if (nuevoCiclo === 'Ciclo Sierra') {
+      setApertura(APERTURAS_SIERRA[0]);
+      const regSierra = fechasApertura.find((f) => f.periodo_lectivo === 'Ciclo Sierra' && f.apertura === APERTURAS_SIERRA[0]);
+      setFechaInicioApertura(regSierra?.fecha_inicio || '');
+      setFechaFinApertura(regSierra?.fecha_fin || '');
+    } else {
+      setApertura('GLOBAL');
+      const regCosta = fechasApertura.find((f) => f.periodo_lectivo === 'Ciclo Costa' && f.apertura === 'GLOBAL');
+      setFechaInicioApertura(regCosta?.fecha_inicio || '');
+      setFechaFinApertura(regCosta?.fecha_fin || '');
+    }
   };
 
-  // Guardar Fechas por Apertura
+  // Guardar Fechas por Apertura (Sierra) o Globales (Costa)
   const handleGuardarFechaApertura = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -79,9 +94,11 @@ export default function CalendarioFeriadosPage() {
       return;
     }
 
+    const aperturaValor = cicloSeleccionado === 'Ciclo Costa' ? 'GLOBAL' : apertura;
+
     const payload = {
       periodo_lectivo: cicloSeleccionado,
-      apertura,
+      apertura: aperturaValor,
       fecha_inicio: fechaInicioApertura,
       fecha_fin: fechaFinApertura,
     };
@@ -90,9 +107,13 @@ export default function CalendarioFeriadosPage() {
       .from('fechas_apertura')
       .upsert([payload], { onConflict: 'periodo_lectivo,apertura' });
 
-    if (error) alert('Error guardando fecha de apertura: ' + error.message);
+    if (error) alert('Error guardando fecha: ' + error.message);
     else {
-      alert(`Fechas para la apertura ${apertura} guardadas correctamente.`);
+      alert(
+        cicloSeleccionado === 'Ciclo Costa'
+          ? 'Fecha global del Ciclo Costa guardada con éxito para todos sus cursos.'
+          : `Fechas para la apertura ${apertura} guardadas correctamente.`
+      );
       cargarDatos();
     }
   };
@@ -106,9 +127,7 @@ export default function CalendarioFeriadosPage() {
       return;
     }
 
-    let payload: any = {
-      nombre: nombreFeriado,
-    };
+    let payload: any = { nombre: nombreFeriado };
 
     if (tipoSeleccion === 'dia') {
       if (!fechaUnica) {
@@ -136,7 +155,7 @@ export default function CalendarioFeriadosPage() {
 
     if (error) alert('Error guardando el feriado: ' + error.message);
     else {
-      alert('Feriado o intervalo no laborable registrado con éxito.');
+      alert('Feriado o intervalo registrado con éxito.');
       setNombreFeriado('');
       setFechaUnica('');
       setFechaInicioFeriado('');
@@ -145,7 +164,6 @@ export default function CalendarioFeriadosPage() {
     }
   };
 
-  // Eliminar Feriado
   const handleEliminarFeriado = async (id: number, nombre: string) => {
     if (!confirm(`¿Deseas eliminar el feriado "${nombre}"?`)) return;
 
@@ -154,20 +172,18 @@ export default function CalendarioFeriadosPage() {
     else cargarDatos();
   };
 
-  const obtenerFechaExistente = (apert: string) => {
-    return fechasApertura.find((f) => f.periodo_lectivo === cicloSeleccionado && f.apertura === apert);
-  };
+  const fechaCostaGlobal = fechasApertura.find((f) => f.periodo_lectivo === 'Ciclo Costa' && f.apertura === 'GLOBAL');
 
   return (
     <main className="max-w-6xl mx-auto p-6 space-y-10">
       <h1 className="text-3xl font-bold text-slate-800">Calendario Académico y Feriados</h1>
 
-      {/* SECCIÓN 1: Configuración de Fechas de Inicio y Fin por Apertura */}
+      {/* SECCIÓN 1: Configuración de Fechas */}
       <section className="bg-slate-900 p-6 rounded-xl text-white shadow-lg space-y-6">
         <div className="border-b border-slate-700 pb-2">
-          <h2 className="text-xl font-semibold">📅 Parametrización de Aperturas (Inicio y Fin)</h2>
+          <h2 className="text-xl font-semibold">📅 Parametrización de Fechas por Ciclo Lectivo</h2>
           <p className="text-xs text-slate-400 mt-1">
-            Configura el rango de vigencia para cada apertura por ciclo lectivo.
+            En el <strong>Ciclo Sierra</strong> puedes definir fechas por cada Apertura. En el <strong>Ciclo Costa</strong> se aplica una <strong>única fecha global</strong> para todos los cursos.
           </p>
         </div>
 
@@ -189,21 +205,39 @@ export default function CalendarioFeriadosPage() {
           ))}
         </div>
 
-        {/* Formulario Asignación Directa */}
+        {/* Formulario de Configuración */}
         <form onSubmit={handleGuardarFechaApertura} className="bg-slate-800/60 p-4 rounded-xl border border-slate-700 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Apertura ({cicloSeleccionado})</label>
-              <select
-                value={apertura}
-                onChange={(e) => setApertura(e.target.value)}
-                className="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono font-bold focus:outline-none"
-              >
-                {aperturasActuales.map((a) => (
-                  <option key={a} value={a}>{a}</option>
-                ))}
-              </select>
-            </div>
+            {cicloSeleccionado === 'Ciclo Sierra' ? (
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Apertura (Sierra)</label>
+                <select
+                  value={apertura}
+                  onChange={(e) => {
+                    const apVal = e.target.value;
+                    setApertura(apVal);
+                    const reg = fechasApertura.find((f) => f.periodo_lectivo === 'Ciclo Sierra' && f.apertura === apVal);
+                    setFechaInicioApertura(reg?.fecha_inicio || '');
+                    setFechaFinApertura(reg?.fecha_fin || '');
+                  }}
+                  className="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono font-bold focus:outline-none"
+                >
+                  {APERTURAS_SIERRA.map((a) => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-semibold text-orange-400 mb-1">Configuración Costa</label>
+                <input
+                  type="text"
+                  value="Fecha Única Global (Todos los Cursos)"
+                  disabled
+                  className="w-full p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-orange-300 font-semibold text-xs cursor-not-allowed"
+                />
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">Fecha de Inicio *</label>
@@ -232,39 +266,56 @@ export default function CalendarioFeriadosPage() {
             type="submit"
             className="bg-[#0052B4] hover:bg-[#004098] text-white px-6 py-2 rounded-lg font-bold text-xs transition-colors cursor-pointer shadow"
           >
-            Guardar Fechas de Apertura
+            {cicloSeleccionado === 'Ciclo Costa' ? 'Guardar Fecha Global Ciclo Costa' : 'Guardar Fechas de Apertura'}
           </button>
         </form>
 
-        {/* Resumen de Aperturas */}
+        {/* Resumen de Vigencia */}
         <div className="space-y-2 pt-2">
           <h3 className="text-sm font-semibold text-slate-200">
-            Resumen de Vigencia para {cicloSeleccionado}
+            Resumen de Vigencia: {cicloSeleccionado}
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-            {aperturasActuales.map((ap) => {
-              const reg = obtenerFechaExistente(ap);
-              return (
-                <div key={ap} className="bg-slate-800 p-3 rounded-lg border border-slate-700 space-y-1">
-                  <span className="bg-blue-900 text-blue-200 text-xs font-bold font-mono px-2 py-0.5 rounded">
-                    {ap}
-                  </span>
-                  {reg ? (
-                    <div className="text-[11px] text-slate-300 font-mono space-y-0.5 pt-1">
-                      <div><strong className="text-emerald-400">Inicio:</strong> {reg.fecha_inicio}</div>
-                      <div><strong className="text-rose-400">Fin:</strong> {reg.fecha_fin}</div>
-                    </div>
-                  ) : (
-                    <p className="text-[11px] text-slate-500 italic pt-1">Sin fechas asignadas</p>
-                  )}
+
+          {cicloSeleccionado === 'Ciclo Sierra' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+              {APERTURAS_SIERRA.map((ap) => {
+                const reg = fechasApertura.find((f) => f.periodo_lectivo === 'Ciclo Sierra' && f.apertura === ap);
+                return (
+                  <div key={ap} className="bg-slate-800 p-3 rounded-lg border border-slate-700 space-y-1">
+                    <span className="bg-blue-900 text-blue-200 text-xs font-bold font-mono px-2 py-0.5 rounded">
+                      {ap}
+                    </span>
+                    {reg ? (
+                      <div className="text-[11px] text-slate-300 font-mono space-y-0.5 pt-1">
+                        <div><strong className="text-emerald-400">Inicio:</strong> {reg.fecha_inicio}</div>
+                        <div><strong className="text-rose-400">Fin:</strong> {reg.fecha_fin}</div>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-slate-500 italic pt-1">Sin fechas asignadas</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="bg-slate-800 p-4 rounded-lg border border-slate-700 max-w-md">
+              <span className="bg-orange-900 text-orange-200 text-xs font-bold px-2.5 py-1 rounded">
+                Ciclo Costa - Fecha Global Única
+              </span>
+              {fechaCostaGlobal ? (
+                <div className="text-xs text-slate-300 font-mono space-y-1 pt-3">
+                  <div><strong className="text-emerald-400">Fecha de Inicio:</strong> {fechaCostaGlobal.fecha_inicio}</div>
+                  <div><strong className="text-rose-400">Fecha de Fin:</strong> {fechaCostaGlobal.fecha_fin}</div>
                 </div>
-              );
-            })}
-          </div>
+              ) : (
+                <p className="text-xs text-slate-500 italic pt-2">No se ha registrado la fecha global para el Ciclo Costa.</p>
+              )}
+            </div>
+          )}
         </div>
       </section>
 
-      {/* SECCIÓN 2: Registro y Gestión de Feriados (Día único o Intervalo) */}
+      {/* SECCIÓN 2: Registro de Feriados */}
       <section className="space-y-6">
         <div className="bg-slate-900 p-6 rounded-xl text-white shadow-lg space-y-5">
           <div className="border-b border-slate-700 pb-2">
@@ -275,7 +326,6 @@ export default function CalendarioFeriadosPage() {
           </div>
 
           <form onSubmit={handleGuardarFeriado} className="space-y-4">
-            {/* Tipo de Registro (Puntual o Intervalo) */}
             <div className="flex items-center space-x-6 text-xs">
               <span className="font-semibold text-slate-300">Tipo de Selección:</span>
               <label className="flex items-center space-x-2 cursor-pointer">
@@ -340,7 +390,7 @@ export default function CalendarioFeriadosPage() {
                     />
                   </div>
 
-                  <div className="md:col-span-1">
+                  <div>
                     <label className="block text-xs font-semibold text-slate-300 mb-1">Fecha de Fin *</label>
                     <input
                       type="date"
@@ -365,7 +415,7 @@ export default function CalendarioFeriadosPage() {
           </form>
         </div>
 
-        {/* Tabla de Feriados e Intervalos Registrados */}
+        {/* Tabla de Feriados */}
         <div className="space-y-3">
           <h3 className="text-xl font-semibold text-slate-800">Días y Periodos Festivos Registrados</h3>
           {loading ? (
