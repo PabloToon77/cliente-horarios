@@ -11,31 +11,51 @@ interface FechaApertura {
   fecha_fin: string;
 }
 
+interface Feriado {
+  id: number;
+  nombre: string;
+  fecha: string;
+  tipo?: string;
+}
+
 const APERTURAS_SIERRA = ['RS0', 'RS1', 'RS2', 'RS3', 'IS1', 'IS2', 'IS3', 'IS4'];
 const APERTURAS_COSTA = ['RC0', 'RC1', 'RC2', 'RC3', 'IC1', 'IC2', 'IC3', 'IC4'];
 
 export default function CalendarioFeriadosPage() {
-  const [fechas, setFechas] = useState<FechaApertura[]>([]);
+  // Estados para Fechas de Apertura
+  const [fechasApertura, setFechasApertura] = useState<FechaApertura[]>([]);
   const [cicloSeleccionado, setCicloSeleccionado] = useState('Ciclo Sierra');
-  const [loading, setLoading] = useState(true);
-
-  // Formulario rápido
   const [apertura, setApertura] = useState(APERTURAS_SIERRA[0]);
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
 
+  // Estados para Feriados
+  const [feriados, setFeriados] = useState<Feriado[]>([]);
+  const [nombreFeriado, setNombreFeriado] = useState('');
+  const [fechaFeriado, setFechaFeriado] = useState('');
+  const [tipoFeriado, setTipoFeriado] = useState('Nacional');
+  const [loading, setLoading] = useState(true);
+
   const aperturasActuales = cicloSeleccionado === 'Ciclo Sierra' ? APERTURAS_SIERRA : APERTURAS_COSTA;
 
-  const cargarFechas = async () => {
+  const cargarDatos = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('fechas_apertura').select('*');
-    if (error) console.error('Error cargando fechas:', error);
-    else setFechas(data || []);
+    
+    // Cargar Fechas de Apertura
+    const { data: dataFechas, error: errorFechas } = await supabase.from('fechas_apertura').select('*');
+    if (errorFechas) console.error('Error cargando fechas de apertura:', errorFechas);
+    else setFechasApertura(dataFechas || []);
+
+    // Cargar Feriados
+    const { data: dataFeriados, error: errorFeriados } = await supabase.from('feriados').select('*').order('fecha', { ascending: true });
+    if (errorFeriados) console.error('Error cargando feriados:', errorFeriados);
+    else setFeriados(dataFeriados || []);
+
     setLoading(false);
   };
 
   useEffect(() => {
-    cargarFechas();
+    cargarDatos();
   }, []);
 
   const handleCicloChange = (nuevoCiclo: string) => {
@@ -43,7 +63,8 @@ export default function CalendarioFeriadosPage() {
     setApertura(nuevoCiclo === 'Ciclo Sierra' ? APERTURAS_SIERRA[0] : APERTURAS_COSTA[0]);
   };
 
-  const handleGuardarFecha = async (e: React.FormEvent) => {
+  // Guardar Fechas por Apertura
+  const handleGuardarFechaApertura = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!fechaInicio || !fechaFin) {
@@ -65,24 +86,59 @@ export default function CalendarioFeriadosPage() {
     if (error) alert('Error guardando fecha de apertura: ' + error.message);
     else {
       alert(`Fechas para la apertura ${apertura} guardadas correctamente.`);
-      cargarFechas();
+      cargarDatos();
     }
   };
 
+  // Guardar Nuevo Feriado
+  const handleGuardarFeriado = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!nombreFeriado || !fechaFeriado) {
+      alert('Por favor completa el nombre y la fecha del feriado.');
+      return;
+    }
+
+    const payload = {
+      nombre: nombreFeriado,
+      fecha: fechaFeriado,
+      tipo: tipoFeriado,
+    };
+
+    const { error } = await supabase.from('feriados').insert([payload]);
+
+    if (error) alert('Error guardando el feriado: ' + error.message);
+    else {
+      alert('Feriado registrado con éxito.');
+      setNombreFeriado('');
+      setFechaFeriado('');
+      cargarDatos();
+    }
+  };
+
+  // Eliminar Feriado
+  const handleEliminarFeriado = async (id: number, nombre: string) => {
+    if (!confirm(`¿Deseas eliminar el feriado "${nombre}"?`)) return;
+
+    const { error } = await supabase.from('feriados').delete().eq('id', id);
+    if (error) alert('Error eliminando feriado: ' + error.message);
+    else cargarDatos();
+  };
+
   const obtenerFechaExistente = (apert: string) => {
-    return fechas.find((f) => f.periodo_lectivo === cicloSeleccionado && f.apertura === apert);
+    return fechasApertura.find((f) => f.periodo_lectivo === cicloSeleccionado && f.apertura === apert);
   };
 
   return (
-    <main className="max-w-6xl mx-auto p-6 space-y-8">
-      <h1 className="text-3xl font-bold text-slate-800">Calendario y Parametrización de Aperturas</h1>
+    <main className="max-w-6xl mx-auto p-6 space-y-10">
+      <h1 className="text-3xl font-bold text-slate-800">Calendario Académico y Feriados</h1>
 
-      {/* Configuración de Fechas de Inicio y Fin por Apertura */}
-      <div className="bg-slate-900 p-6 rounded-xl text-white shadow-lg space-y-6">
+      {/* SECCIÓN 1: Configuración de Fechas de Inicio y Fin por Apertura */}
+      <section className="bg-slate-900 p-6 rounded-xl text-white shadow-lg space-y-6">
         <div className="border-b border-slate-700 pb-2">
-          <h2 className="text-xl font-semibold">📅 Asignación de Fechas de Inicio y Fin por Apertura</h2>
+          <h2 className="text-xl font-semibold">📅 Parametrización de Aperturas (Inicio y Fin)</h2>
           <p className="text-xs text-slate-400 mt-1">
-            Configura el rango de vigencia para cada apertura. Estas fechas influirán en la planificación académica.
+            Configura el rango de vigencia para cada apertura por ciclo lectivo.
           </p>
         </div>
 
@@ -105,7 +161,7 @@ export default function CalendarioFeriadosPage() {
         </div>
 
         {/* Formulario Asignación Directa */}
-        <form onSubmit={handleGuardarFecha} className="bg-slate-800/60 p-4 rounded-xl border border-slate-700 space-y-4">
+        <form onSubmit={handleGuardarFechaApertura} className="bg-slate-800/60 p-4 rounded-xl border border-slate-700 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-300 mb-1">Apertura ({cicloSeleccionado})</label>
@@ -151,7 +207,7 @@ export default function CalendarioFeriadosPage() {
           </button>
         </form>
 
-        {/* Resumen de Aperturas del Ciclo Seleccionado */}
+        {/* Resumen de Aperturas */}
         <div className="space-y-2 pt-2">
           <h3 className="text-sm font-semibold text-slate-200">
             Resumen de Vigencia para {cicloSeleccionado}
@@ -177,7 +233,92 @@ export default function CalendarioFeriadosPage() {
             })}
           </div>
         </div>
-      </div>
+      </section>
+
+      {/* SECCIÓN 2: Registro y Gestión de Feriados */}
+      <section className="space-y-6">
+        <div className="bg-slate-900 p-6 rounded-xl text-white shadow-lg space-y-4">
+          <div className="border-b border-slate-700 pb-2">
+            <h2 className="text-xl font-semibold">🏖️ Registro de Feriados y Días No Laborables</h2>
+            <p className="text-xs text-slate-400 mt-1">
+              Agrega los días festivos o no lectivos que deban considerarse al calcular los horarios.
+            </p>
+          </div>
+
+          <form onSubmit={handleGuardarFeriado} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div className="md:col-span-2">
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Nombre o Motivo del Feriado *</label>
+              <input
+                type="text"
+                required
+                placeholder="Ej. Batalla de Pichincha / Carnaval"
+                value={nombreFeriado}
+                onChange={(e) => setNombreFeriado(e.target.value)}
+                className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Fecha *</label>
+              <input
+                type="date"
+                required
+                value={fechaFeriado}
+                onChange={(e) => setFechaFeriado(e.target.value)}
+                className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white font-mono focus:outline-none text-sm"
+              />
+            </div>
+
+            <div>
+              <button
+                type="submit"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-lg font-bold text-xs transition-colors cursor-pointer shadow"
+              >
+                + Registrar Feriado
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Tabla de Feriados Registrados */}
+        <div className="space-y-3">
+          <h3 className="text-xl font-semibold text-slate-800">Días Festivos Registrados</h3>
+          {loading ? (
+            <p className="text-slate-500">Cargando feriados...</p>
+          ) : feriados.length === 0 ? (
+            <p className="text-slate-500 italic">No hay feriados registrados.</p>
+          ) : (
+            <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm bg-white">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-slate-100 text-slate-700 text-sm">
+                  <tr>
+                    <th className="p-3.5 border-b">Fecha</th>
+                    <th className="p-3.5 border-b">Nombre del Feriado</th>
+                    <th className="p-3.5 border-b text-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-sm">
+                  {feriados.map((f) => (
+                    <tr key={f.id} className="hover:bg-slate-50">
+                      <td className="p-3.5 font-mono font-bold text-blue-700">{f.fecha}</td>
+                      <td className="p-3.5 text-slate-800 font-medium">{f.nombre}</td>
+                      <td className="p-3.5 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleEliminarFeriado(f.id, f.nombre)}
+                          className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 text-xs px-2.5 py-1 rounded font-medium cursor-pointer"
+                        >
+                          🗑️ Eliminar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </section>
     </main>
   );
 }
