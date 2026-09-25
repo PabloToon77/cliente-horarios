@@ -14,8 +14,10 @@ interface FechaApertura {
 interface Feriado {
   id: number;
   nombre: string;
-  fecha: string;
-  tipo?: string;
+  fecha?: string;
+  fecha_inicio?: string;
+  fecha_fin?: string;
+  es_intervalo?: boolean;
 }
 
 const APERTURAS_SIERRA = ['RS0', 'RS1', 'RS2', 'RS3', 'IS1', 'IS2', 'IS3', 'IS4'];
@@ -26,28 +28,33 @@ export default function CalendarioFeriadosPage() {
   const [fechasApertura, setFechasApertura] = useState<FechaApertura[]>([]);
   const [cicloSeleccionado, setCicloSeleccionado] = useState('Ciclo Sierra');
   const [apertura, setApertura] = useState(APERTURAS_SIERRA[0]);
-  const [fechaInicio, setFechaInicio] = useState('');
-  const [fechaFin, setFechaFin] = useState('');
+  const [fechaInicioApertura, setFechaInicioApertura] = useState('');
+  const [fechaFinApertura, setFechaFinApertura] = useState('');
 
   // Estados para Feriados
   const [feriados, setFeriados] = useState<Feriado[]>([]);
   const [nombreFeriado, setNombreFeriado] = useState('');
-  const [fechaFeriado, setFechaFeriado] = useState('');
-  const [tipoFeriado, setTipoFeriado] = useState('Nacional');
+  const [tipoSeleccion, setTipoSeleccion] = useState<'dia' | 'intervalo'>('dia');
+  const [fechaUnica, setFechaUnica] = useState('');
+  const [fechaInicioFeriado, setFechaInicioFeriado] = useState('');
+  const [fechaFinFeriado, setFechaFinFeriado] = useState('');
   const [loading, setLoading] = useState(true);
 
   const aperturasActuales = cicloSeleccionado === 'Ciclo Sierra' ? APERTURAS_SIERRA : APERTURAS_COSTA;
 
   const cargarDatos = async () => {
     setLoading(true);
-    
+
     // Cargar Fechas de Apertura
     const { data: dataFechas, error: errorFechas } = await supabase.from('fechas_apertura').select('*');
     if (errorFechas) console.error('Error cargando fechas de apertura:', errorFechas);
     else setFechasApertura(dataFechas || []);
 
     // Cargar Feriados
-    const { data: dataFeriados, error: errorFeriados } = await supabase.from('feriados').select('*').order('fecha', { ascending: true });
+    const { data: dataFeriados, error: errorFeriados } = await supabase
+      .from('feriados')
+      .select('*')
+      .order('fecha_inicio', { ascending: true });
     if (errorFeriados) console.error('Error cargando feriados:', errorFeriados);
     else setFeriados(dataFeriados || []);
 
@@ -67,7 +74,7 @@ export default function CalendarioFeriadosPage() {
   const handleGuardarFechaApertura = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!fechaInicio || !fechaFin) {
+    if (!fechaInicioApertura || !fechaFinApertura) {
       alert('Por favor selecciona las fechas de inicio y fin.');
       return;
     }
@@ -75,8 +82,8 @@ export default function CalendarioFeriadosPage() {
     const payload = {
       periodo_lectivo: cicloSeleccionado,
       apertura,
-      fecha_inicio: fechaInicio,
-      fecha_fin: fechaFin,
+      fecha_inicio: fechaInicioApertura,
+      fecha_fin: fechaFinApertura,
     };
 
     const { error } = await supabase
@@ -94,24 +101,46 @@ export default function CalendarioFeriadosPage() {
   const handleGuardarFeriado = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!nombreFeriado || !fechaFeriado) {
-      alert('Por favor completa el nombre y la fecha del feriado.');
+    if (!nombreFeriado) {
+      alert('Por favor ingresa el nombre o motivo del feriado.');
       return;
     }
 
-    const payload = {
+    let payload: any = {
       nombre: nombreFeriado,
-      fecha: fechaFeriado,
-      tipo: tipoFeriado,
     };
+
+    if (tipoSeleccion === 'dia') {
+      if (!fechaUnica) {
+        alert('Por favor selecciona la fecha del feriado.');
+        return;
+      }
+      payload.fecha = fechaUnica;
+      payload.fecha_inicio = fechaUnica;
+      payload.fecha_fin = fechaUnica;
+    } else {
+      if (!fechaInicioFeriado || !fechaFinFeriado) {
+        alert('Por favor selecciona las fechas de inicio y fin del intervalo.');
+        return;
+      }
+      if (fechaInicioFeriado > fechaFinFeriado) {
+        alert('La fecha de inicio debe ser anterior o igual a la fecha de fin.');
+        return;
+      }
+      payload.fecha = fechaInicioFeriado;
+      payload.fecha_inicio = fechaInicioFeriado;
+      payload.fecha_fin = fechaFinFeriado;
+    }
 
     const { error } = await supabase.from('feriados').insert([payload]);
 
     if (error) alert('Error guardando el feriado: ' + error.message);
     else {
-      alert('Feriado registrado con éxito.');
+      alert('Feriado o intervalo no laborable registrado con éxito.');
       setNombreFeriado('');
-      setFechaFeriado('');
+      setFechaUnica('');
+      setFechaInicioFeriado('');
+      setFechaFinFeriado('');
       cargarDatos();
     }
   };
@@ -181,8 +210,8 @@ export default function CalendarioFeriadosPage() {
               <input
                 type="date"
                 required
-                value={fechaInicio}
-                onChange={(e) => setFechaInicio(e.target.value)}
+                value={fechaInicioApertura}
+                onChange={(e) => setFechaInicioApertura(e.target.value)}
                 className="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono focus:outline-none"
               />
             </div>
@@ -192,8 +221,8 @@ export default function CalendarioFeriadosPage() {
               <input
                 type="date"
                 required
-                value={fechaFin}
-                onChange={(e) => setFechaFin(e.target.value)}
+                value={fechaFinApertura}
+                onChange={(e) => setFechaFinApertura(e.target.value)}
                 className="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono focus:outline-none"
               />
             </div>
@@ -235,54 +264,110 @@ export default function CalendarioFeriadosPage() {
         </div>
       </section>
 
-      {/* SECCIÓN 2: Registro y Gestión de Feriados */}
+      {/* SECCIÓN 2: Registro y Gestión de Feriados (Día único o Intervalo) */}
       <section className="space-y-6">
-        <div className="bg-slate-900 p-6 rounded-xl text-white shadow-lg space-y-4">
+        <div className="bg-slate-900 p-6 rounded-xl text-white shadow-lg space-y-5">
           <div className="border-b border-slate-700 pb-2">
-            <h2 className="text-xl font-semibold">🏖️ Registro de Feriados y Días No Laborables</h2>
+            <h2 className="text-xl font-semibold">🏖️ Registro de Feriados y Periodos No Laborables</h2>
             <p className="text-xs text-slate-400 mt-1">
-              Agrega los días festivos o no lectivos que deban considerarse al calcular los horarios.
+              Agrega días festivos puntuales o rangos de vacaciones/descansos obligatorios.
             </p>
           </div>
 
-          <form onSubmit={handleGuardarFeriado} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-            <div className="md:col-span-2">
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Nombre o Motivo del Feriado *</label>
-              <input
-                type="text"
-                required
-                placeholder="Ej. Batalla de Pichincha / Carnaval"
-                value={nombreFeriado}
-                onChange={(e) => setNombreFeriado(e.target.value)}
-                className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none text-sm"
-              />
+          <form onSubmit={handleGuardarFeriado} className="space-y-4">
+            {/* Tipo de Registro (Puntual o Intervalo) */}
+            <div className="flex items-center space-x-6 text-xs">
+              <span className="font-semibold text-slate-300">Tipo de Selección:</span>
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="tipoSeleccion"
+                  value="dia"
+                  checked={tipoSeleccion === 'dia'}
+                  onChange={() => setTipoSeleccion('dia')}
+                  className="accent-blue-500"
+                />
+                <span>Un solo día</span>
+              </label>
+
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="tipoSeleccion"
+                  value="intervalo"
+                  checked={tipoSeleccion === 'intervalo'}
+                  onChange={() => setTipoSeleccion('intervalo')}
+                  className="accent-blue-500"
+                />
+                <span>Intervalo (Fecha Inicio y Fecha Fin)</span>
+              </label>
             </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">Fecha *</label>
-              <input
-                type="date"
-                required
-                value={fechaFeriado}
-                onChange={(e) => setFechaFeriado(e.target.value)}
-                className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white font-mono focus:outline-none text-sm"
-              />
-            </div>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+              <div className="md:col-span-2">
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Nombre o Motivo *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder={tipoSeleccion === 'dia' ? 'Ej. Batalla de Pichincha' : 'Ej. Vacaciones de Fin de Año'}
+                  value={nombreFeriado}
+                  onChange={(e) => setNombreFeriado(e.target.value)}
+                  className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none text-sm"
+                />
+              </div>
 
-            <div>
-              <button
-                type="submit"
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-lg font-bold text-xs transition-colors cursor-pointer shadow"
-              >
-                + Registrar Feriado
-              </button>
+              {tipoSeleccion === 'dia' ? (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Fecha del Feriado *</label>
+                  <input
+                    type="date"
+                    required
+                    value={fechaUnica}
+                    onChange={(e) => setFechaUnica(e.target.value)}
+                    className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white font-mono focus:outline-none text-sm"
+                  />
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">Fecha de Inicio *</label>
+                    <input
+                      type="date"
+                      required
+                      value={fechaInicioFeriado}
+                      onChange={(e) => setFechaInicioFeriado(e.target.value)}
+                      className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white font-mono focus:outline-none text-sm"
+                    />
+                  </div>
+
+                  <div className="md:col-span-1">
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">Fecha de Fin *</label>
+                    <input
+                      type="date"
+                      required
+                      value={fechaFinFeriado}
+                      onChange={(e) => setFechaFinFeriado(e.target.value)}
+                      className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white font-mono focus:outline-none text-sm"
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className={tipoSeleccion === 'intervalo' ? 'md:col-span-4 flex justify-end' : ''}>
+                <button
+                  type="submit"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-lg font-bold text-xs transition-colors cursor-pointer shadow"
+                >
+                  + Registrar Feriado / Intervalo
+                </button>
+              </div>
             </div>
           </form>
         </div>
 
-        {/* Tabla de Feriados Registrados */}
+        {/* Tabla de Feriados e Intervalos Registrados */}
         <div className="space-y-3">
-          <h3 className="text-xl font-semibold text-slate-800">Días Festivos Registrados</h3>
+          <h3 className="text-xl font-semibold text-slate-800">Días y Periodos Festivos Registrados</h3>
           {loading ? (
             <p className="text-slate-500">Cargando feriados...</p>
           ) : feriados.length === 0 ? (
@@ -292,27 +377,46 @@ export default function CalendarioFeriadosPage() {
               <table className="w-full text-left border-collapse">
                 <thead className="bg-slate-100 text-slate-700 text-sm">
                   <tr>
-                    <th className="p-3.5 border-b">Fecha</th>
-                    <th className="p-3.5 border-b">Nombre del Feriado</th>
+                    <th className="p-3.5 border-b">Tipo</th>
+                    <th className="p-3.5 border-b">Fecha / Rango</th>
+                    <th className="p-3.5 border-b">Nombre / Motivo</th>
                     <th className="p-3.5 border-b text-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
-                  {feriados.map((f) => (
-                    <tr key={f.id} className="hover:bg-slate-50">
-                      <td className="p-3.5 font-mono font-bold text-blue-700">{f.fecha}</td>
-                      <td className="p-3.5 text-slate-800 font-medium">{f.nombre}</td>
-                      <td className="p-3.5 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleEliminarFeriado(f.id, f.nombre)}
-                          className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 text-xs px-2.5 py-1 rounded font-medium cursor-pointer"
-                        >
-                          🗑️ Eliminar
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {feriados.map((f) => {
+                    const esRango = f.fecha_inicio && f.fecha_fin && f.fecha_inicio !== f.fecha_fin;
+                    const displayFecha = esRango
+                      ? `${f.fecha_inicio}  ⟶  ${f.fecha_fin}`
+                      : f.fecha_inicio || f.fecha;
+
+                    return (
+                      <tr key={f.id} className="hover:bg-slate-50">
+                        <td className="p-3.5">
+                          <span
+                            className={`text-[11px] font-bold px-2 py-0.5 rounded border ${
+                              esRango
+                                ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                : 'bg-blue-50 text-blue-700 border-blue-200'
+                            }`}
+                          >
+                            {esRango ? 'Intervalo' : 'Día Único'}
+                          </span>
+                        </td>
+                        <td className="p-3.5 font-mono font-bold text-slate-800">{displayFecha}</td>
+                        <td className="p-3.5 text-slate-800 font-medium">{f.nombre}</td>
+                        <td className="p-3.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleEliminarFeriado(f.id, f.nombre)}
+                            className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-300 text-xs px-2.5 py-1 rounded font-medium cursor-pointer"
+                          >
+                            🗑️ Eliminar
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
