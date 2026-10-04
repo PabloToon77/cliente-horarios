@@ -19,8 +19,6 @@ interface Curso {
   codigo: string;
   sede: string;
   periodo_lectivo: string;
-  horario_json?: { dia: string; horaInicio: string; minutoInicio: string; horaFin: string; minutoFin: string }[];
-  malla_json?: Record<string, number>;
 }
 
 interface ResultadoSimulacion {
@@ -48,6 +46,7 @@ const MATERIAS_DISPONIBLES = [
   'OV',
 ];
 
+const SEDES_SIMULADAS = ['Ambato', 'Quito', 'Latacunga', 'Riobamba', 'Online'];
 const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
 const BLOQUES = [
@@ -62,6 +61,15 @@ const BLOQUES = [
   '16:00 - 17:00',
   '17:00 - 18:00',
   '18:00 - 19:00',
+];
+
+// Cursos ficticios por defecto si no existen en la base de datos
+const CURSOS_MOCK: Curso[] = [
+  { id: 901, codigo: 'RS0-AMB-01-27', sede: 'Ambato', periodo_lectivo: 'Ciclo Sierra' },
+  { id: 902, codigo: 'RS0-QUI-01-27', sede: 'Quito', periodo_lectivo: 'Ciclo Sierra' },
+  { id: 903, codigo: 'RS0-LAT-01-27', sede: 'Latacunga', periodo_lectivo: 'Ciclo Sierra' },
+  { id: 904, codigo: 'AMB-UTA-A', sede: 'Ambato', periodo_lectivo: 'Ciclo Costa' },
+  { id: 905, codigo: 'ONL-EPN-A', sede: 'Online', periodo_lectivo: 'Ciclo Costa' },
 ];
 
 export default function AsignacionPage() {
@@ -87,7 +95,7 @@ export default function AsignacionPage() {
     const { data: cData } = await supabase.from('cursos').select('*');
 
     setProfesores(pData || []);
-    setCursos(cData || []);
+    setCursos(cData && cData.length > 0 ? cData : CURSOS_MOCK);
     setLoading(false);
   };
 
@@ -160,24 +168,20 @@ export default function AsignacionPage() {
       diaEvaluado: dia,
       bloqueEvaluado: bloque,
       profesorElegido: elegido,
-      motivoEleccion: `Elegido exitosamente. Docente con la materia "${materia}" habilitado en ${sedeCurso}.`,
+      motivoEleccion: `Elegido exitosamente. Docente habilitado en ${sedeCurso} con la materia "${materia}".`,
       descartados,
     };
   };
 
-  // Generador Automático de Entradas y Ejecución de Batería de Tests
+  // Generador Automático de Entradas y Batería de Tests
   const generarYEjecutarPruebasAutomated = () => {
-    if (cursos.length === 0) {
-      alert('Se requiere tener al menos un curso registrado para realizar las pruebas automáticas.');
-      return;
-    }
-
     setEjecutandoBatch(true);
+
+    const cursosBase = cursos.length > 0 ? cursos : CURSOS_MOCK;
     const nuevosResultados: ResultadoSimulacion[] = [];
 
     for (let i = 1; i <= cantidadPruebas; i++) {
-      // Selección aleatoria de entradas (inputs automáticos)
-      const cursoRandom = cursos[Math.floor(Math.random() * cursos.length)];
+      const cursoRandom = cursosBase[Math.floor(Math.random() * cursosBase.length)];
       const materiaRandom = MATERIAS_DISPONIBLES[Math.floor(Math.random() * MATERIAS_DISPONIBLES.length)];
       const diaRandom = DIAS[Math.floor(Math.random() * DIAS.length)];
       const bloqueRandom = BLOQUES[Math.floor(Math.random() * BLOQUES.length)];
@@ -203,11 +207,16 @@ export default function AsignacionPage() {
         <div className="border-b border-slate-700 pb-3 flex justify-between items-center flex-wrap gap-2">
           <div>
             <h2 className="text-xl font-semibold text-orange-400">
-              ⚡ Generador Automático de Pruebas y visualizador de Outputs
+              ⚡ Generador Automático de Pruebas y Visualizador de Salidas (Outputs)
             </h2>
             <p className="text-xs text-slate-400 mt-1">
-              El sistema generará escenarios aleatorios de asignación combinando materias, sedes, días y franjas horarias para evaluar las salidas del algoritmo.
+              El sistema generará escenarios aleatorios de asignación combinando materias, sedes, días y franjas horarias para evaluar las respuestas del algoritmo.
             </p>
+          </div>
+          <div className="flex space-x-2">
+            <span className="bg-blue-900/60 text-blue-300 border border-blue-500/30 text-xs px-3 py-1 rounded-full font-mono">
+              {profesores.length} Docentes Cargados
+            </span>
           </div>
         </div>
 
@@ -246,7 +255,7 @@ export default function AsignacionPage() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
                 <span className="text-2xl font-mono font-extrabold text-blue-400">{resultadosBatch.length}</span>
-                <span className="block text-xs text-slate-400 font-semibold mt-1">Total Pruebas Generadas</span>
+                <span className="block text-xs text-slate-400 font-semibold mt-1">Total Escenarios Generados</span>
               </div>
               <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
                 <span className="text-2xl font-mono font-extrabold text-emerald-400">{exitosos}</span>
@@ -254,7 +263,7 @@ export default function AsignacionPage() {
               </div>
               <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
                 <span className="text-2xl font-mono font-extrabold text-rose-400">{fallidos}</span>
-                <span className="block text-xs text-slate-400 font-semibold mt-1">Sin Docente Apto</span>
+                <span className="block text-xs text-slate-400 font-semibold mt-1">Sin Docente Elegible</span>
               </div>
             </div>
 
@@ -274,10 +283,10 @@ export default function AsignacionPage() {
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
                       <div className="flex items-center space-x-2">
                         <span className="bg-slate-800 text-slate-300 font-mono text-xs px-2 py-0.5 rounded font-bold">
-                          Prueba #{res.idPrueba}
+                          Escenario #{res.idPrueba}
                         </span>
                         <span className="text-xs font-bold text-blue-400">
-                          Curso: {res.cursoCodigo} ({res.sedeCurso})
+                          Curso: {res.cursoCodigo} (Sede {res.sedeCurso})
                         </span>
                       </div>
 
