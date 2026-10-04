@@ -3,70 +3,91 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 
-interface BloqueClase {
-  id: string;
-  dia: string;
-  horaInicio: string;
-  minutoInicio: string;
-  horaFin: string;
-  minutoFin: string;
-}
-
-interface Curso {
-  id: number;
-  nombre: string;
-  sede: string;
-  jornada: string;
-  aula_fisica: string;
-  malla_json?: Record<string, number>;
-  talleres_json?: Array<{ nombre: string; clases: number }>;
-  horario_json?: BloqueClase[];
-}
-
 interface Profesor {
   id: number;
   nombre: string;
   apellido: string;
   sede: string;
-  tipo_contrato: string;
+  color_hex?: string;
   horas_max_semanales?: number;
   disponibilidad_json?: Record<string, string[]>;
   profesor_materia?: { materias: { nombre: string } }[];
 }
 
-interface Asignacion {
+interface Curso {
   id: number;
-  curso_id: number;
-  profesor_id: number;
-  materia: string;
-  profesores?: { nombre: string; apellido: string };
+  codigo: string;
+  sede: string;
+  periodo_lectivo: string;
+  horario_json?: { dia: string; horaInicio: string; minutoInicio: string; horaFin: string; minutoFin: string }[];
+  malla_json?: Record<string, number>;
 }
 
+interface ResultadoSimulacion {
+  idPrueba: number;
+  cursoCodigo: string;
+  sedeCurso: string;
+  materiaEvaluada: string;
+  diaEvaluado: string;
+  bloqueEvaluado: string;
+  profesorElegido: Profesor | null;
+  motivoEleccion: string;
+  descartados: { nombre: string; motivo: string }[];
+}
+
+const MATERIAS_DISPONIBLES = [
+  'Matemáticas',
+  'Química',
+  'Física',
+  'Biología',
+  'Lengua',
+  'Ciencias Sociales',
+  'Razonamiento Numérico',
+  'Razonamiento Verbal',
+  'Razonamiento Lógico',
+  'OV',
+];
+
+const DIAS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+
+const BLOQUES = [
+  '07:00 - 08:00',
+  '08:00 - 09:00',
+  '09:00 - 10:00',
+  '10:00 - 11:00',
+  '11:00 - 12:00',
+  '12:00 - 13:00',
+  '14:00 - 15:00',
+  '15:00 - 16:00',
+  '16:00 - 17:00',
+  '17:00 - 18:00',
+  '18:00 - 19:00',
+];
+
 export default function AsignacionPage() {
-  const [cursos, setCursos] = useState<Curso[]>([]);
   const [profesores, setProfesores] = useState<Profesor[]>([]);
-  const [asignaciones, setAsignaciones] = useState<Asignacion[]>([]);
-  const [cursoSeleccionadoId, setCursoSeleccionadoId] = useState<number | ''>('');
+  const [cursos, setCursos] = useState<Curso[]>([]);
   const [loading, setLoading] = useState(true);
-  const [procesandoAuto, setProcesandoAuto] = useState(false);
-  const [logAuto, setLogAuto] = useState<string[]>([]);
+
+  // Estados para pruebas automáticas
+  const [cantidadPruebas, setCantidadPruebas] = useState<number>(5);
+  const [resultadosBatch, setResultadosBatch] = useState<ResultadoSimulacion[]>([]);
+  const [ejecutandoBatch, setEjecutandoBatch] = useState(false);
 
   const cargarDatos = async () => {
     setLoading(true);
 
-    const { data: cData } = await supabase.from('cursos').select('*').eq('estado', 'Activo');
     const { data: pData } = await supabase.from('profesores').select(`
       *,
-      profesor_materia ( materias ( nombre ) )
-    `);
-    const { data: aData } = await supabase.from('asignaciones').select(`
-      *,
-      profesores ( nombre, apellido )
+      profesor_materia (
+        materias ( nombre )
+      )
     `);
 
-    setCursos(cData || []);
+    const { data: cData } = await supabase.from('cursos').select('*');
+
     setProfesores(pData || []);
-    setAsignaciones(aData || []);
+    setCursos(cData || []);
     setLoading(false);
   };
 
@@ -74,240 +95,247 @@ export default function AsignacionPage() {
     cargarDatos();
   }, []);
 
-  const cursoActual = cursos.find((c) => c.id === Number(cursoSeleccionadoId));
+  // Función núcleo de evaluación del algoritmo
+  const evaluarEscenario = (
+    idPrueba: number,
+    cursoObj: Curso,
+    materia: string,
+    dia: string,
+    bloque: string
+  ): ResultadoSimulacion => {
+    const sedeCurso = cursoObj.sede || 'Ambato';
+    const descartados: { nombre: string; motivo: string }[] = [];
+    const candidatosAptos: Profesor[] = [];
 
-  // Obtener docentes aptos de forma manual
-  const obtenerCandidatos = (materiaNombre: string) => {
-    if (!cursoActual) return [];
+    profesores.forEach((prof) => {
+      const nombreCompleto = `${prof.nombre} ${prof.apellido}`;
 
-    return profesores.filter((prof) => {
-      const dictaMateria = prof.profesor_materia?.some(
-        (pm) => pm.materias?.nombre.toLowerCase() === materiaNombre.toLowerCase()
-      );
-      return dictaMateria;
+      // 1. Materia
+      const materiasProfesor = prof.profesor_materia?.map((pm) => pm.materias?.nombre) || [];
+      if (!materiasProfesor.includes(materia)) {
+        descartados.push({ nombre: nombreCompleto, motivo: `No dicta la materia "${materia}".` });
+        return;
+      }
+
+      // 2. Sede
+      const sedesProfesor = prof.sede ? prof.sede.split(', ') : [];
+      if (!sedesProfesor.includes(sedeCurso)) {
+        descartados.push({ nombre: nombreCompleto, motivo: `No habilitado para la sede "${sedeCurso}".` });
+        return;
+      }
+
+      // 3. Disponibilidad Horaria
+      const disponibilidadDia = prof.disponibilidad_json?.[dia] || [];
+      if (!disponibilidadDia.includes(bloque)) {
+        descartados.push({
+          nombre: nombreCompleto,
+          motivo: `Sin disponibilidad el ${dia} a las ${bloque}.`,
+        });
+        return;
+      }
+
+      candidatosAptos.push(prof);
     });
-  };
 
-  const handleAsignarProfesor = async (materia: string, profesorId: number) => {
-    if (!cursoSeleccionadoId) return;
-
-    const asignacionExistente = asignaciones.find(
-      (a) => a.curso_id === Number(cursoSeleccionadoId) && a.materia === materia
-    );
-
-    if (asignacionExistente) {
-      const { error } = await supabase
-        .from('asignaciones')
-        .update({ profesor_id: profesorId })
-        .eq('id', asignacionExistente.id);
-
-      if (error) alert('Error actualizando asignación: ' + error.message);
-      else cargarDatos();
-    } else {
-      const { error } = await supabase.from('asignaciones').insert([
-        {
-          curso_id: Number(cursoSeleccionadoId),
-          profesor_id: profesorId,
-          materia,
-        },
-      ]);
-
-      if (error) alert('Error guardando asignación: ' + error.message);
-      else cargarDatos();
+    if (candidatosAptos.length === 0) {
+      return {
+        idPrueba,
+        cursoCodigo: cursoObj.codigo,
+        sedeCurso,
+        materiaEvaluada: materia,
+        diaEvaluado: dia,
+        bloqueEvaluado: bloque,
+        profesorElegido: null,
+        motivoEleccion: 'Ningún docente disponible con materia, sede y horario compatibles.',
+        descartados,
+      };
     }
+
+    const elegido = candidatosAptos[0];
+    return {
+      idPrueba,
+      cursoCodigo: cursoObj.codigo,
+      sedeCurso,
+      materiaEvaluada: materia,
+      diaEvaluado: dia,
+      bloqueEvaluado: bloque,
+      profesorElegido: elegido,
+      motivoEleccion: `Elegido exitosamente. Docente con la materia "${materia}" habilitado en ${sedeCurso}.`,
+      descartados,
+    };
   };
 
-  // ALGORITMO DE ASIGNACIÓN AUTOMÁTICA
-  const ejecutarAsignacionAutomatica = async () => {
-    setProcesandoAuto(true);
-    const logs: string[] = [];
-    const cursosAProcesar = cursoSeleccionadoId ? cursos.filter((c) => c.id === Number(cursoSeleccionadoId)) : cursos;
-
-    if (cursosAProcesar.length === 0) {
-      alert('No hay cursos activos disponibles para asignar.');
-      setProcesandoAuto(false);
+  // Generador Automático de Entradas y Ejecución de Batería de Tests
+  const generarYEjecutarPruebasAutomated = () => {
+    if (cursos.length === 0) {
+      alert('Se requiere tener al menos un curso registrado para realizar las pruebas automáticas.');
       return;
     }
 
-    logs.push(`Iniciando algoritmo para ${cursosAProcesar.length} curso(s)...`);
+    setEjecutandoBatch(true);
+    const nuevosResultados: ResultadoSimulacion[] = [];
 
-    for (const curso of cursosAProcesar) {
-      logs.push(`\n📌 Procesando curso: "${curso.nombre}" (${curso.sede})`);
+    for (let i = 1; i <= cantidadPruebas; i++) {
+      // Selección aleatoria de entradas (inputs automáticos)
+      const cursoRandom = cursos[Math.floor(Math.random() * cursos.length)];
+      const materiaRandom = MATERIAS_DISPONIBLES[Math.floor(Math.random() * MATERIAS_DISPONIBLES.length)];
+      const diaRandom = DIAS[Math.floor(Math.random() * DIAS.length)];
+      const bloqueRandom = BLOQUES[Math.floor(Math.random() * BLOQUES.length)];
 
-      if (!curso.malla_json) continue;
-
-      const materias = Object.entries(curso.malla_json).filter(([_, clases]) => clases > 0);
-
-      for (const [materia, clasesRequeridas] of materias) {
-        // 1. Filtrar docentes habilitados en la materia
-        let candidatos = profesores.filter((p) =>
-          p.profesor_materia?.some(
-            (pm) => pm.materias?.nombre.toLowerCase() === materia.toLowerCase()
-          )
-        );
-
-        if (candidatos.length === 0) {
-          logs.push(`  ❌ [${materia}]: Sin docentes registrados para esta materia.`);
-          continue;
-        }
-
-        // 2. Priorizar candidatos por coincidencia de Sede
-        candidatos.sort((a, b) => {
-          const aSedeMatch = a.sede === curso.sede ? 1 : 0;
-          const bSedeMatch = b.sede === curso.sede ? 1 : 0;
-          return bSedeMatch - aSedeMatch;
-        });
-
-        // 3. Seleccionar el primer candidato que cumpla las condiciones
-        const profesorSeleccionado = candidatos[0];
-
-        if (profesorSeleccionado) {
-          const asignacionExistente = asignaciones.find(
-            (a) => a.curso_id === curso.id && a.materia === materia
-          );
-
-          if (asignacionExistente) {
-            await supabase
-              .from('asignaciones')
-              .update({ profesor_id: profesorSeleccionado.id })
-              .eq('id', asignacionExistente.id);
-          } else {
-            await supabase.from('asignaciones').insert([
-              {
-                curso_id: curso.id,
-                profesor_id: profesorSeleccionado.id,
-                materia,
-              },
-            ]);
-          }
-
-          logs.push(
-            `  ✓ [${materia}]: Asignado a ${profesorSeleccionado.nombre} ${profesorSeleccionado.apellido} (${profesorSeleccionado.sede})`
-          );
-        }
-      }
+      const resultadoTest = evaluarEscenario(i, cursoRandom, materiaRandom, diaRandom, bloqueRandom);
+      nuevosResultados.push(resultadoTest);
     }
 
-    setLogAuto(logs);
-    setProcesandoAuto(false);
-    await cargarDatos();
-    alert('¡Proceso de asignación automática completado!');
+    setResultadosBatch(nuevosResultados);
+    setEjecutandoBatch(false);
   };
+
+  // Métricas de resumen
+  const exitosos = resultadosBatch.filter((r) => r.profesorElegido !== null).length;
+  const fallidos = resultadosBatch.filter((r) => r.profesorElegido === null).length;
 
   return (
     <main className="max-w-6xl mx-auto p-6 space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="text-3xl font-bold text-slate-800">Asignación de Docentes a Cursos</h1>
-        <button
-          onClick={ejecutarAsignacionAutomatica}
-          disabled={procesandoAuto}
-          className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-400 text-white font-semibold text-sm px-5 py-3 rounded-xl shadow-md transition-all flex items-center justify-center space-x-2"
-        >
-          <span>{procesandoAuto ? 'Procesando...' : '⚡ Asignación Automática Inteligente'}</span>
-        </button>
-      </div>
+      <h1 className="text-3xl font-bold text-slate-800">Pruebas de Asignación Automática</h1>
 
-      {/* Selector de Curso */}
-      <div className="bg-slate-900 p-6 rounded-xl space-y-4 text-white shadow-lg">
-        <h2 className="text-xl font-semibold border-b border-slate-700 pb-2">
-          1. Selecciona un Curso / Paralelo Activo (Opcional)
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* PANEL GENERADOR DE PRUEBAS AUTOMÁTICAS */}
+      <section className="bg-slate-900 p-6 rounded-xl text-white shadow-lg space-y-6">
+        <div className="border-b border-slate-700 pb-3 flex justify-between items-center flex-wrap gap-2">
           <div>
-            <label className="block text-xs text-slate-400 mb-1">Curso / Grupo</label>
+            <h2 className="text-xl font-semibold text-orange-400">
+              ⚡ Generador Automático de Pruebas y visualizador de Outputs
+            </h2>
+            <p className="text-xs text-slate-400 mt-1">
+              El sistema generará escenarios aleatorios de asignación combinando materias, sedes, días y franjas horarias para evaluar las salidas del algoritmo.
+            </p>
+          </div>
+        </div>
+
+        {/* Formulario de Lanzamiento de Batería */}
+        <div className="flex flex-wrap items-end gap-4 bg-slate-800/60 p-4 rounded-xl border border-slate-700">
+          <div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              Número de Escenarios Automáticos a Generar:
+            </label>
             <select
-              value={cursoSeleccionadoId}
-              onChange={(e) => setCursoSeleccionadoId(e.target.value === '' ? '' : Number(e.target.value))}
-              className="w-full p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-blue-500"
+              value={cantidadPruebas}
+              onChange={(e) => setCantidadPruebas(Number(e.target.value))}
+              className="p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono text-sm focus:outline-none"
             >
-              <option value="">-- Todos los Cursos (Para asignación masiva) --</option>
-              {cursos.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nombre} ({c.sede} - {c.jornada})
-                </option>
-              ))}
+              <option value={3}>3 Pruebas</option>
+              <option value={5}>5 Pruebas</option>
+              <option value={10}>10 Pruebas</option>
+              <option value={15}>15 Pruebas</option>
             </select>
           </div>
 
-          {cursoActual && (
-            <div className="bg-slate-800 p-3 rounded-lg text-xs space-y-1">
-              <p><span className="text-slate-400">Aula Física:</span> {cursoActual.aula_fisica}</p>
-              <p><span className="text-slate-400">Sede:</span> {cursoActual.sede}</p>
-              <p><span className="text-slate-400">Bloques agendados:</span> {cursoActual.horario_json?.length || 0} clases/sem</p>
+          <button
+            type="button"
+            onClick={generarYEjecutarPruebasAutomated}
+            disabled={ejecutandoBatch || loading}
+            className="bg-[#0052B4] hover:bg-[#004098] text-white px-6 py-2.5 rounded-lg font-bold text-xs transition-colors shadow-md cursor-pointer flex items-center gap-2"
+          >
+            🚀 Generar Entradas y Ejecutar Pruebas
+          </button>
+        </div>
+
+        {/* VISTA DE OUTPUTS Y RESUMEN */}
+        {resultadosBatch.length > 0 && (
+          <div className="space-y-6 pt-2">
+            {/* Tarjetas de Métricas Resumen */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
+                <span className="text-2xl font-mono font-extrabold text-blue-400">{resultadosBatch.length}</span>
+                <span className="block text-xs text-slate-400 font-semibold mt-1">Total Pruebas Generadas</span>
+              </div>
+              <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
+                <span className="text-2xl font-mono font-extrabold text-emerald-400">{exitosos}</span>
+                <span className="block text-xs text-slate-400 font-semibold mt-1">Asignaciones Exitosas</span>
+              </div>
+              <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
+                <span className="text-2xl font-mono font-extrabold text-rose-400">{fallidos}</span>
+                <span className="block text-xs text-slate-400 font-semibold mt-1">Sin Docente Apto</span>
+              </div>
             </div>
-          )}
-        </div>
-      </div>
 
-      {/* Resumen del Proceso Automático */}
-      {logAuto.length > 0 && (
-        <div className="bg-slate-800 p-5 rounded-xl text-xs font-mono text-slate-200 space-y-1 border border-slate-700">
-          <h3 className="font-bold text-emerald-400 text-sm mb-2 font-sans">Reporte de Asignación Automática:</h3>
-          {logAuto.map((line, idx) => (
-            <div key={idx} className="whitespace-pre-wrap">{line}</div>
-          ))}
-        </div>
-      )}
+            {/* Listado de Outputs Detallado */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">
+                Outputs Generados por Escenario:
+              </h3>
 
-      {/* Panel de Asignación Manual o Verificación */}
-      {cursoActual && (
-        <div className="space-y-4">
-          <h2 className="text-2xl font-semibold text-slate-800">
-            2. Malla Curricular y Asignación de Profesores
-          </h2>
-
-          <div className="grid grid-cols-1 gap-4">
-            {cursoActual.malla_json &&
-              Object.entries(cursoActual.malla_json)
-                .filter(([_, clases]) => clases > 0)
-                .map(([materia, clases]) => {
-                  const candidatos = obtenerCandidatos(materia);
-                  const asignado = asignaciones.find(
-                    (a) => a.curso_id === cursoActual.id && a.materia === materia
-                  );
-
-                  return (
-                    <div
-                      key={materia}
-                      className="border border-slate-200 p-5 rounded-xl bg-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4"
-                    >
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <h3 className="font-bold text-slate-900 text-base">{materia}</h3>
-                          <span className="bg-blue-50 text-blue-700 text-xs px-2 py-0.5 rounded border border-blue-200">
-                            {clases} clases requeridas
-                          </span>
-                        </div>
-                        {asignado && (
-                          <p className="text-xs text-emerald-600 font-semibold mt-1">
-                            ✓ Docente Asignado: {asignado.profesores?.nombre} {asignado.profesores?.apellido}
-                          </p>
-                        )}
+              <div className="space-y-3">
+                {resultadosBatch.map((res) => (
+                  <div
+                    key={res.idPrueba}
+                    className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3"
+                  >
+                    {/* Encabezado del Test */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                      <div className="flex items-center space-x-2">
+                        <span className="bg-slate-800 text-slate-300 font-mono text-xs px-2 py-0.5 rounded font-bold">
+                          Prueba #{res.idPrueba}
+                        </span>
+                        <span className="text-xs font-bold text-blue-400">
+                          Curso: {res.cursoCodigo} ({res.sedeCurso})
+                        </span>
                       </div>
 
-                      <div className="w-full md:w-72">
-                        <label className="block text-[11px] text-slate-500 mb-1">
-                          Docente Asignado / Candidatos ({candidatos.length})
-                        </label>
-                        <select
-                          value={asignado ? asignado.profesor_id : ''}
-                          onChange={(e) => handleAsignarProfesor(materia, Number(e.target.value))}
-                          className="w-full p-2 text-xs rounded border border-slate-300 bg-slate-50 focus:outline-none focus:border-blue-500"
-                        >
-                          <option value="">-- Asignar Docente --</option>
-                          {candidatos.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.nombre} {p.apellido} ({p.sede})
-                            </option>
-                          ))}
-                        </select>
+                      <div className="flex items-center space-x-2 text-xs font-mono">
+                        <span className="bg-slate-900 text-slate-300 px-2 py-0.5 rounded">
+                          {res.materiaEvaluada}
+                        </span>
+                        <span className="bg-slate-900 text-amber-400 px-2 py-0.5 rounded">
+                          {res.diaEvaluado} {res.bloqueEvaluado}
+                        </span>
                       </div>
                     </div>
-                  );
-                })}
+
+                    {/* Output Principal */}
+                    {res.profesorElegido ? (
+                      <div className="bg-emerald-950/40 border border-emerald-500/40 p-3 rounded-lg flex items-center space-x-3">
+                        <div
+                          className="w-8 h-8 rounded-full border border-white flex items-center justify-center font-bold text-white text-xs shadow"
+                          style={{ backgroundColor: res.profesorElegido.color_hex || '#2563eb' }}
+                        >
+                          {res.profesorElegido.nombre[0]}
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-emerald-400 block">
+                            ✅ OUTPUT: {res.profesorElegido.nombre} {res.profesorElegido.apellido}
+                          </span>
+                          <span className="text-[11px] text-slate-300">{res.motivoEleccion}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-rose-950/40 border border-rose-500/40 p-3 rounded-lg text-xs text-rose-300">
+                        ❌ <strong>OUTPUT: Sin docente elegible.</strong> {res.motivoEleccion}
+                      </div>
+                    )}
+
+                    {/* Desglose de Descartes */}
+                    {res.descartados.length > 0 && (
+                      <details className="text-xs text-slate-400 cursor-pointer pt-1">
+                        <summary className="hover:text-slate-200 font-semibold">
+                          🔍 Ver razones de descarte de otros docentes ({res.descartados.length})
+                        </summary>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-900">
+                          {res.descartados.map((d, idx) => (
+                            <div key={idx} className="bg-slate-900 p-2 rounded text-[11px]">
+                              <strong className="text-slate-300 block">{d.nombre}:</strong>
+                              <span className="text-slate-400">{d.motivo}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </section>
     </main>
   );
 }
