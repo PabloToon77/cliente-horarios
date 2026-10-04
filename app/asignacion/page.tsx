@@ -19,131 +19,33 @@ interface Curso {
   codigo: string;
   sede: string;
   periodo_lectivo: string;
+  etapa?: string;
+  horario_json?: { dia: string; horaInicio: string; minutoInicio: string; horaFin: string; minutoFin: string }[];
+  malla_json?: Record<string, number>;
 }
-
-interface ResultadoSimulacion {
-  idPrueba: number;
-  cursoCodigo: string;
-  sedeCurso: string;
-  materiaEvaluada: string;
-  diaEvaluado: string;
-  bloqueEvaluado: string;
-  profesorElegido: Profesor | null;
-  motivoEleccion: string;
-  descartados: { nombre: string; motivo: string }[];
-}
-
-const MATERIAS_DISPONIBLES = [
-  'Matemáticas',
-  'Química',
-  'Física',
-  'Biología',
-  'Lengua',
-  'Ciencias Sociales',
-  'Razonamiento Numérico',
-  'Razonamiento Verbal',
-  'Razonamiento Lógico',
-  'OV',
-];
-
-const DIAS_LABORABLES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'];
-const BLOQUES_COMUNES = ['08:00 - 09:00', '09:00 - 10:00', '10:00 - 11:00', '15:00 - 16:00', '16:00 - 17:00'];
-
-const CURSOS_MOCK: Curso[] = [
-  { id: 901, codigo: 'RS0-AMB-01-27', sede: 'Ambato', periodo_lectivo: 'Ciclo Sierra' },
-  { id: 902, codigo: 'RS0-QUI-01-27', sede: 'Quito', periodo_lectivo: 'Ciclo Sierra' },
-  { id: 903, codigo: 'RS0-LAT-01-27', sede: 'Latacunga', periodo_lectivo: 'Ciclo Sierra' },
-  { id: 904, codigo: 'AMB-UTA-A', sede: 'Ambato', periodo_lectivo: 'Ciclo Costa' },
-  { id: 905, codigo: 'ONL-EPN-A', sede: 'Online', periodo_lectivo: 'Ciclo Costa' },
-];
-
-// Docentes simulados con alta disponibilidad para garantizar éxitos en los tests
-const PROFESORES_MOCK: Profesor[] = [
-  {
-    id: 991,
-    nombre: 'Carlos',
-    apellido: 'Mendoza (Test)',
-    sede: 'Ambato, Quito, Latacunga, Online',
-    color_hex: '#2563eb',
-    profesor_materia: [
-      { materias: { nombre: 'Matemáticas' } },
-      { materias: { nombre: 'Física' } },
-      { materias: { nombre: 'Razonamiento Numérico' } },
-    ],
-    disponibilidad_json: {
-      Lunes: ['08:00 - 09:00', '09:00 - 10:00', '10:00 - 11:00', '15:00 - 16:00'],
-      Martes: ['08:00 - 09:00', '09:00 - 10:00', '10:00 - 11:00', '15:00 - 16:00'],
-      Miércoles: ['08:00 - 09:00', '09:00 - 10:00', '10:00 - 11:00'],
-      Jueves: ['08:00 - 09:00', '09:00 - 10:00', '10:00 - 11:00'],
-      Viernes: ['08:00 - 09:00', '09:00 - 10:00'],
-    },
-  },
-  {
-    id: 992,
-    nombre: 'Ana',
-    apellido: 'García (Test)',
-    sede: 'Ambato, Quito, Riobamba, Online',
-    color_hex: '#059669',
-    profesor_materia: [
-      { materias: { nombre: 'Química' } },
-      { materias: { nombre: 'Biología' } },
-      { materias: { nombre: 'Lengua' } },
-      { materias: { nombre: 'OV' } },
-    ],
-    disponibilidad_json: {
-      Lunes: ['08:00 - 09:00', '09:00 - 10:00', '10:00 - 11:00'],
-      Martes: ['08:00 - 09:00', '09:00 - 10:00', '15:00 - 16:00'],
-      Miércoles: ['08:00 - 09:00', '09:00 - 10:00', '10:00 - 11:00'],
-      Jueves: ['08:00 - 09:00', '09:00 - 10:00'],
-      Viernes: ['08:00 - 09:00', '09:00 - 10:00'],
-    },
-  },
-  {
-    id: 993,
-    nombre: 'Luis',
-    apellido: 'Paredes (Test)',
-    sede: 'Ambato, Latacunga, Online',
-    color_hex: '#ff6b35',
-    profesor_materia: [
-      { materias: { nombre: 'Razonamiento Verbal' } },
-      { materias: { nombre: 'Razonamiento Lógico' } },
-      { materias: { nombre: 'Ciencias Sociales' } },
-    ],
-    disponibilidad_json: {
-      Lunes: ['08:00 - 09:00', '09:00 - 10:00', '15:00 - 16:00'],
-      Martes: ['08:00 - 09:00', '09:00 - 10:00'],
-      Miércoles: ['08:00 - 09:00', '09:00 - 10:00'],
-      Jueves: ['08:00 - 09:00', '09:00 - 10:00'],
-      Viernes: ['08:00 - 09:00', '09:00 - 10:00'],
-    },
-  },
-];
 
 export default function AsignacionPage() {
   const [profesores, setProfesores] = useState<Profesor[]>([]);
   const [cursos, setCursos] = useState<Curso[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [cantidadPruebas, setCantidadPruebas] = useState<number>(5);
-  const [resultadosBatch, setResultadosBatch] = useState<ResultadoSimulacion[]>([]);
-  const [ejecutandoBatch, setEjecutandoBatch] = useState(false);
-
   const cargarDatos = async () => {
     setLoading(true);
 
-    const { data: pData } = await supabase.from('profesores').select(`
+    const { data: pData, error: pError } = await supabase.from('profesores').select(`
       *,
       profesor_materia (
         materias ( nombre )
       )
     `);
 
-    const { data: cData } = await supabase.from('cursos').select('*');
+    const { data: cData, error: cError } = await supabase.from('cursos').select('*').order('created_at', { ascending: false });
 
-    // Si no hay profesores reales suficientes, combinamos con el MOCK para garantizar pruebas efectivas
-    const listaDocentes = pData && pData.length > 0 ? [...pData, ...PROFESORES_MOCK] : PROFESORES_MOCK;
-    setProfesores(listaDocentes);
-    setCursos(cData && cData.length > 0 ? cData : CURSOS_MOCK);
+    if (pError) console.error('Error cargando profesores:', pError);
+    if (cError) console.error('Error cargando cursos:', cError);
+
+    setProfesores(pData || []);
+    setCursos(cData || []);
     setLoading(false);
   };
 
@@ -151,235 +53,89 @@ export default function AsignacionPage() {
     cargarDatos();
   }, []);
 
-  const evaluarEscenario = (
-    idPrueba: number,
-    cursoObj: Curso,
-    materia: string,
-    dia: string,
-    bloque: string
-  ): ResultadoSimulacion => {
-    const sedeCurso = cursoObj.sede || 'Ambato';
-    const descartados: { nombre: string; motivo: string }[] = [];
-    const candidatosAptos: Profesor[] = [];
-
-    profesores.forEach((prof) => {
-      const nombreCompleto = `${prof.nombre} ${prof.apellido}`;
-
-      // 1. Materia
-      const materiasProfesor = prof.profesor_materia?.map((pm) => pm.materias?.nombre) || [];
-      if (!materiasProfesor.includes(materia)) {
-        descartados.push({ nombre: nombreCompleto, motivo: `No imparte "${materia}".` });
-        return;
-      }
-
-      // 2. Sede
-      const sedesProfesor = prof.sede ? prof.sede.split(', ') : [];
-      if (!sedesProfesor.includes(sedeCurso)) {
-        descartados.push({ nombre: nombreCompleto, motivo: `No habilitado en la sede "${sedeCurso}".` });
-        return;
-      }
-
-      // 3. Disponibilidad Horaria
-      const disponibilidadDia = prof.disponibilidad_json?.[dia] || [];
-      if (!disponibilidadDia.includes(bloque)) {
-        descartados.push({
-          nombre: nombreCompleto,
-          motivo: `Sin disponibilidad el ${dia} a las ${bloque}.`,
-        });
-        return;
-      }
-
-      candidatosAptos.push(prof);
-    });
-
-    if (candidatosAptos.length === 0) {
-      return {
-        idPrueba,
-        cursoCodigo: cursoObj.codigo,
-        sedeCurso,
-        materiaEvaluada: materia,
-        diaEvaluado: dia,
-        bloqueEvaluado: bloque,
-        profesorElegido: null,
-        motivoEleccion: 'Sin docentes aptos que coincidan en Materia, Sede y Horario.',
-        descartados,
-      };
-    }
-
-    const elegido = candidatosAptos[0];
-    return {
-      idPrueba,
-      cursoCodigo: cursoObj.codigo,
-      sedeCurso,
-      materiaEvaluada: materia,
-      diaEvaluado: dia,
-      bloqueEvaluado: bloque,
-      profesorElegido: elegido,
-      motivoEleccion: `Asignación exitosa. Docente con la materia "${materia}" disponible en ${sedeCurso}.`,
-      descartados,
-    };
-  };
-
-  const generarYEjecutarPruebasAutomated = () => {
-    setEjecutandoBatch(true);
-
-    const cursosBase = cursos.length > 0 ? cursos : CURSOS_MOCK;
-    const nuevosResultados: ResultadoSimulacion[] = [];
-
-    for (let i = 1; i <= cantidadPruebas; i++) {
-      const cursoRandom = cursosBase[Math.floor(Math.random() * cursosBase.length)];
-      const materiaRandom = MATERIAS_DISPONIBLES[Math.floor(Math.random() * MATERIAS_DISPONIBLES.length)];
-      const diaRandom = DIAS_LABORABLES[Math.floor(Math.random() * DIAS_LABORABLES.length)];
-      const bloqueRandom = BLOQUES_COMUNES[Math.floor(Math.random() * BLOQUES_COMUNES.length)];
-
-      const resultadoTest = evaluarEscenario(i, cursoRandom, materiaRandom, diaRandom, bloqueRandom);
-      nuevosResultados.push(resultadoTest);
-    }
-
-    setResultadosBatch(nuevosResultados);
-    setEjecutandoBatch(false);
-  };
-
-  const exitosos = resultadosBatch.filter((r) => r.profesorElegido !== null).length;
-  const fallidos = resultadosBatch.filter((r) => r.profesorElegido === null).length;
-
   return (
     <main className="max-w-6xl mx-auto p-6 space-y-8">
-      <h1 className="text-3xl font-bold text-slate-800">Pruebas de Asignación Automática</h1>
+      <h1 className="text-3xl font-bold text-slate-800">Módulo de Asignación Docente</h1>
 
-      {/* PANEL GENERADOR DE PRUEBAS AUTOMÁTICAS */}
-      <section className="bg-slate-900 p-6 rounded-xl text-white shadow-lg space-y-6">
-        <div className="border-b border-slate-700 pb-3 flex justify-between items-center flex-wrap gap-2">
-          <div>
-            <h2 className="text-xl font-semibold text-orange-400">
-              ⚡ Generador Automático de Pruebas y Visualizador de Salidas (Outputs)
-            </h2>
-            <p className="text-xs text-slate-400 mt-1">
-              Prueba los escenarios aleatorios combinando materias, sedes y disponibilidad.
+      {/* Resumen de Datos Registrados */}
+      <section className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-6">
+        <h2 className="text-xl font-bold text-slate-800 border-b border-slate-100 pb-2">
+          Estatus del Sistema Académico
+        </h2>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div className="p-5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <div className="text-3xl font-extrabold text-[#0052B4]">
+              {loading ? '...' : profesores.length}
+            </div>
+            <div className="text-sm font-semibold text-slate-700">Docentes Registrados</div>
+            <p className="text-xs text-slate-500">
+              Profesorado disponible con materias, disponibilidad horaria y sedes asociadas.
             </p>
           </div>
-          <span className="bg-blue-900/60 text-blue-300 border border-blue-500/30 text-xs px-3 py-1 rounded-full font-mono">
-            {profesores.length} Docentes Evaluables
-          </span>
-        </div>
 
-        {/* Formulario */}
-        <div className="flex flex-wrap items-end gap-4 bg-slate-800/60 p-4 rounded-xl border border-slate-700">
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Número de Escenarios Automáticos a Generar:
-            </label>
-            <select
-              value={cantidadPruebas}
-              onChange={(e) => setCantidadPruebas(Number(e.target.value))}
-              className="p-2.5 rounded-lg bg-slate-900 border border-slate-700 text-white font-mono text-sm focus:outline-none"
-            >
-              <option value={3}>3 Pruebas</option>
-              <option value={5}>5 Pruebas</option>
-              <option value={10}>10 Pruebas</option>
-              <option value={15}>15 Pruebas</option>
-            </select>
+          <div className="p-5 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+            <div className="text-3xl font-extrabold text-[#FF6B35]">
+              {loading ? '...' : cursos.length}
+            </div>
+            <div className="text-sm font-semibold text-slate-700">Cursos y Paralelos Creados</div>
+            <p className="text-xs text-slate-500">
+              Cursos con código único, etapa, malla curricular y horarios configurados.
+            </p>
           </div>
-
-          <button
-            type="button"
-            onClick={generarYEjecutarPruebasAutomated}
-            disabled={ejecutandoBatch || loading}
-            className="bg-[#0052B4] hover:bg-[#004098] text-white px-6 py-2.5 rounded-lg font-bold text-xs transition-colors shadow-md cursor-pointer flex items-center gap-2"
-          >
-            🚀 Generar Entradas y Ejecutar Pruebas
-          </button>
         </div>
+      </section>
 
-        {/* OUTPUTS */}
-        {resultadosBatch.length > 0 && (
-          <div className="space-y-6 pt-2">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
-                <span className="text-2xl font-mono font-extrabold text-blue-400">{resultadosBatch.length}</span>
-                <span className="block text-xs text-slate-400 font-semibold mt-1">Total Escenarios</span>
-              </div>
-              <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
-                <span className="text-2xl font-mono font-extrabold text-emerald-400">{exitosos}</span>
-                <span className="block text-xs text-slate-400 font-semibold mt-1">Asignaciones Exitosas</span>
-              </div>
-              <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 text-center">
-                <span className="text-2xl font-mono font-extrabold text-rose-400">{fallidos}</span>
-                <span className="block text-xs text-slate-400 font-semibold mt-1">Sin Docente Elegible</span>
-              </div>
-            </div>
+      {/* Listado de Cursos Disponibles para Asignar */}
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold text-slate-800">Cursos Pendientes de Asignación</h2>
 
-            <div className="space-y-4">
-              <h3 className="text-sm font-bold text-slate-300 uppercase tracking-wider">
-                Outputs Generados por Escenario:
-              </h3>
-
-              <div className="space-y-3">
-                {resultadosBatch.map((res) => (
-                  <div
-                    key={res.idPrueba}
-                    className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2">
-                      <div className="flex items-center space-x-2">
-                        <span className="bg-slate-800 text-slate-300 font-mono text-xs px-2 py-0.5 rounded font-bold">
-                          Escenario #{res.idPrueba}
-                        </span>
-                        <span className="text-xs font-bold text-blue-400">
-                          Curso: {res.cursoCodigo} (Sede {res.sedeCurso})
-                        </span>
-                      </div>
-
-                      <div className="flex items-center space-x-2 text-xs font-mono">
-                        <span className="bg-slate-900 text-slate-300 px-2 py-0.5 rounded">
-                          {res.materiaEvaluada}
-                        </span>
-                        <span className="bg-slate-900 text-amber-400 px-2 py-0.5 rounded">
-                          {res.diaEvaluado} {res.bloqueEvaluado}
-                        </span>
-                      </div>
-                    </div>
-
-                    {res.profesorElegido ? (
-                      <div className="bg-emerald-950/40 border border-emerald-500/40 p-3 rounded-lg flex items-center space-x-3">
-                        <div
-                          className="w-8 h-8 rounded-full border border-white flex items-center justify-center font-bold text-white text-xs shadow"
-                          style={{ backgroundColor: res.profesorElegido.color_hex || '#2563eb' }}
-                        >
-                          {res.profesorElegido.nombre[0]}
-                        </div>
-                        <div>
-                          <span className="text-xs font-bold text-emerald-400 block">
-                            ✅ OUTPUT: {res.profesorElegido.nombre} {res.profesorElegido.apellido}
-                          </span>
-                          <span className="text-[11px] text-slate-300">{res.motivoEleccion}</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="bg-rose-950/40 border border-rose-500/40 p-3 rounded-lg text-xs text-rose-300">
-                        ❌ <strong>OUTPUT: Sin docente elegible.</strong> {res.motivoEleccion}
-                      </div>
-                    )}
-
-                    {res.descartados.length > 0 && (
-                      <details className="text-xs text-slate-400 cursor-pointer pt-1">
-                        <summary className="hover:text-slate-200 font-semibold">
-                          🔍 Ver razones de descarte ({res.descartados.length} Evaluados)
-                        </summary>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-900">
-                          {res.descartados.map((d, idx) => (
-                            <div key={idx} className="bg-slate-900 p-2 rounded text-[11px]">
-                              <strong className="text-slate-300 block">{d.nombre}:</strong>
-                              <span className="text-slate-400">{d.motivo}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </details>
-                    )}
-                  </div>
+        {loading ? (
+          <p className="text-slate-500">Cargando datos del sistema...</p>
+        ) : cursos.length === 0 ? (
+          <p className="text-slate-500 italic">No hay cursos registrados actualmente.</p>
+        ) : (
+          <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm bg-white">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-slate-100 text-slate-700 text-sm">
+                <tr>
+                  <th className="p-3.5 border-b">Código del Curso</th>
+                  <th className="p-3.5 border-b">Etapa</th>
+                  <th className="p-3.5 border-b">Sede</th>
+                  <th className="p-3.5 border-b">Período / Ciclo</th>
+                  <th className="p-3.5 border-b text-center">Estado de Asignación</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-sm">
+                {cursos.map((c) => (
+                  <tr key={c.id} className="hover:bg-slate-50">
+                    <td className="p-3.5">
+                      <span className="bg-blue-50 text-[#0052B4] border border-blue-200 font-mono font-extrabold text-xs px-2.5 py-1 rounded-md">
+                        {c.codigo}
+                      </span>
+                    </td>
+                    <td className="p-3.5">
+                      <span className="bg-slate-100 text-slate-800 border border-slate-300 text-xs font-semibold px-2 py-0.5 rounded">
+                        {c.etapa || 'Base'}
+                      </span>
+                    </td>
+                    <td className="p-3.5 text-slate-700 font-medium">{c.sede}</td>
+                    <td className="p-3.5 text-slate-600">
+                      <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${
+                        c.periodo_lectivo === 'Ciclo Sierra' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                      }`}>
+                        {c.periodo_lectivo}
+                      </span>
+                    </td>
+                    <td className="p-3.5 text-center">
+                      <span className="bg-slate-100 text-slate-600 text-xs font-medium px-2.5 py-1 rounded border border-slate-200">
+                        Pendiente
+                      </span>
+                    </td>
+                  </tr>
                 ))}
-              </div>
-            </div>
+              </tbody>
+            </table>
           </div>
         )}
       </section>
